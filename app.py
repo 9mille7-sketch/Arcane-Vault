@@ -11,10 +11,11 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 OWNER_ID = 1063556821517877258
+MY_GUILD_ID = 1483266011728838719  # Your Specific Server
 
 app = Flask(__name__)
 
-# 2. DISCORD BOT SETUP (SLASH COMMAND READY)
+# 2. DISCORD BOT SETUP (INSTANT SYNC)
 class ArcaneBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
@@ -23,9 +24,11 @@ class ArcaneBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # This forces Discord to see your new /status and /welcome commands
-        await self.tree.sync()
-        print(f"--- ARCANE V5: Slash Commands Synced ---")
+        # Force sync specifically to your server for instant results
+        guild = discord.Object(id=MY_GUILD_ID)
+        self.tree.copy_global_to(guild=guild)
+        await self.tree.sync(guild=guild)
+        print(f"--- ARCANE V5: Instant Sync to {MY_GUILD_ID} Complete ---")
 
 bot = ArcaneBot()
 
@@ -41,7 +44,7 @@ def get_registry():
 @bot.tree.command(name="status", description="Check the health of the Arcane Vault")
 async def status(interaction: discord.Interaction):
     if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message("❌ **Access Denied.** You are not the Prime Architect.", ephemeral=True)
+        return await interaction.response.send_message("❌ **Access Denied.**", ephemeral=True)
     
     registry = get_registry()
     pub_count = len(registry.get('authorized_guilds', [])) if registry else 0
@@ -70,7 +73,7 @@ async def welcome(interaction: discord.Interaction, member: discord.Member):
     
     await interaction.response.send_message(embed=welcome_embed)
 
-# 4. FLASK API (The 'Not Found' Fix)
+# 4. FLASK API (Keeps Render Alive)
 @app.route('/')
 def home():
     return "<h1>Arcane API is LIVE. 🛡️</h1><p>System is guarding the vault.</p>"
@@ -89,17 +92,15 @@ def verify():
             guild = bot.get_guild(int(g['guild_id']))
             if guild:
                 m = guild.get_member(user_id)
-                if m and any(str(r.id) == str(g['publisher_role_id']) for r in m.roles):
+                if m and any(str(role.id) == str(g['publisher_role_id']) for role in m.roles):
                     return jsonify({"role": "PUBLISHER", "folder": g['folder']})
 
     return jsonify({"role": "USER", "access": "DENIED"})
 
 # 5. EXECUTION
 def run_flask():
-    # Render binds to port 10000
     app.run(host='0.0.0.0', port=10000)
 
 if __name__ == "__main__":
-    # Start API in background, then start Bot
     threading.Thread(target=run_flask, daemon=True).start()
     bot.run(TOKEN)
