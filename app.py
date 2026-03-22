@@ -4,16 +4,16 @@ from discord import app_commands
 from discord.ext import commands
 from flask import Flask
 import threading
+import time
 from dotenv import load_dotenv
 
 # 1. SETUP & SECURITY
 load_dotenv()
-# This pulls the token safely from Render's secret settings
 TOKEN = os.getenv("DISCORD_TOKEN")
 if TOKEN:
     TOKEN = TOKEN.strip()
 
-# 2. FLASK WEB SERVER (Keep-Alive for Render)
+# 2. FLASK WEB SERVER (The Link)
 app = Flask(__name__)
 
 @app.route('/')
@@ -21,8 +21,11 @@ def home():
     return "<h1>Arcane API is LIVE. 🛡️</h1><p>System is guarding the vault.</p>"
 
 def run_flask():
-    # Render uses port 10000 by default
-    app.run(host='0.0.0.0', port=10000)
+    # Render's default port is 10000
+    try:
+        app.run(host='0.0.0.0', port=10000, debug=False, use_reloader=False)
+    except Exception as e:
+        print(f"Flask Error: {e}")
 
 # 3. DISCORD BOT SETUP
 intents = discord.Intents.default()
@@ -34,7 +37,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f'--- ARCANE V5: {bot.user} is Online ---')
     try:
-        # This forces the commands to show up in your server immediately
+        # This makes your slash commands appear in Discord
         synced = await bot.tree.sync()
         print(f"--- ARCANE V5: Instant Sync of {len(synced)} Commands Complete ---")
     except Exception as e:
@@ -55,15 +58,20 @@ async def status(interaction: discord.Interaction):
 async def welcome(interaction: discord.Interaction):
     await interaction.response.send_message(f"Welcome to the Vault, {interaction.user.mention}! 🧪")
 
-# 6. EXECUTION
+# 6. EXECUTION BLOCK
 if __name__ == "__main__":
     if not TOKEN:
-        print("ERROR: No DISCORD_TOKEN found in Environment Variables!")
+        print("CRITICAL ERROR: No DISCORD_TOKEN found! Check Render Environment Variables.")
     else:
-        # Start the web server in a background thread
+        # START WEB SERVER FIRST
+        print("--- ARCANE V5: Booting Web Guard... ---")
         t = threading.Thread(target=run_flask)
         t.daemon = True
         t.start()
         
-        # Start the Bot
+        # WAIT FOR PORT TO INITIALIZE
+        time.sleep(2)
+        
+        # START BOT SECOND
+        print("--- ARCANE V5: Launching Bot Brain... ---")
         bot.run(TOKEN)
