@@ -1,106 +1,69 @@
 import os
-import json
 import discord
-import threading
-from flask import Flask, request, jsonify
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+from flask import Flask
+import threading
 from dotenv import load_dotenv
 
-# 1. LOAD CONFIGURATION
+# 1. SETUP & SECURITY
 load_dotenv()
+# This pulls the token safely from Render's secret settings
 TOKEN = os.getenv("DISCORD_TOKEN")
-OWNER_ID = 1063556821517877258
-MY_GUILD_ID = 1483266011728838719  # Your Specific Server
+if TOKEN:
+    TOKEN = TOKEN.strip()
 
+# 2. FLASK WEB SERVER (Keep-Alive for Render)
 app = Flask(__name__)
 
-# 2. DISCORD BOT SETUP (INSTANT SYNC)
-class ArcaneBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.members = True
-        intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        # Force sync specifically to your server for instant results
-        guild = discord.Object(id=MY_GUILD_ID)
-        self.tree.copy_global_to(guild=guild)
-        await self.tree.sync(guild=guild)
-        print(f"--- ARCANE V5: Instant Sync to {MY_GUILD_ID} Complete ---")
-
-bot = ArcaneBot()
-
-def get_registry():
-    try:
-        with open('registry.json', 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Registry Error: {e}")
-        return None
-
-# 3. SLASH COMMANDS
-@bot.tree.command(name="status", description="Check the health of the Arcane Vault")
-async def status(interaction: discord.Interaction):
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message("❌ **Access Denied.**", ephemeral=True)
-    
-    registry = get_registry()
-    pub_count = len(registry.get('authorized_guilds', [])) if registry else 0
-    
-    embed = discord.Embed(title="🛡️ Arcane V5 System Diagnostics", color=0x5865F2)
-    embed.add_field(name="Gatekeeper Status", value="🟢 Online & Guarding", inline=True)
-    embed.add_field(name="Authorized Publishers", value=f"📊 {pub_count}", inline=True)
-    embed.add_field(name="Cloud Host", value="☁️ Render Web Service", inline=False)
-    embed.set_footer(text="Verified Owner: Brian Miller")
-    
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="welcome", description="Onboard a new partner to the network")
-@app_commands.describe(member="The partner to welcome")
-async def welcome(interaction: discord.Interaction, member: discord.Member):
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message("❌ Only the Owner can run onboarding.", ephemeral=True)
-
-    welcome_embed = discord.Embed(
-        title="⚔️ Welcome to the Arcane Network",
-        description=f"Greetings {member.mention}, your server is now linked to the Master Vault.",
-        color=0x00ff00
-    )
-    welcome_embed.add_field(name="Next Step", value="Check your assigned GitHub folder for script uploads.", inline=False)
-    welcome_embed.set_footer(text="Arcane V5 Security Protocol")
-    
-    await interaction.response.send_message(embed=welcome_embed)
-
-# 4. FLASK API (Keeps Render Alive)
 @app.route('/')
 def home():
     return "<h1>Arcane API is LIVE. 🛡️</h1><p>System is guarding the vault.</p>"
 
-@app.route('/verify-access', methods=['POST'])
-def verify():
-    data = request.json
-    user_id = int(data.get('discord_id'))
-    
-    if user_id == OWNER_ID:
-        return jsonify({"role": "OWNER", "access": "ALL"})
-
-    registry = get_registry()
-    if registry:
-        for g in registry.get('authorized_guilds', []):
-            guild = bot.get_guild(int(g['guild_id']))
-            if guild:
-                m = guild.get_member(user_id)
-                if m and any(str(role.id) == str(g['publisher_role_id']) for role in m.roles):
-                    return jsonify({"role": "PUBLISHER", "folder": g['folder']})
-
-    return jsonify({"role": "USER", "access": "DENIED"})
-
-# 5. EXECUTION
 def run_flask():
+    # Render uses port 10000 by default
     app.run(host='0.0.0.0', port=10000)
 
+# 3. DISCORD BOT SETUP
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# 4. BOT EVENTS
+@bot.event
+async def on_ready():
+    print(f'--- ARCANE V5: {bot.user} is Online ---')
+    try:
+        # This forces the commands to show up in your server immediately
+        synced = await bot.tree.sync()
+        print(f"--- ARCANE V5: Instant Sync of {len(synced)} Commands Complete ---")
+    except Exception as e:
+        print(f"Sync Error: {e}")
+
+# 5. SLASH COMMANDS
+@bot.tree.command(name="status", description="Check the vault status")
+async def status(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🛡️ Arcane Vault Status",
+        description="Systems are operational. V5 is active.",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="Latency", value=f"{round(bot.latency * 1000)}ms")
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="welcome", description="Send a test welcome message")
+async def welcome(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Welcome to the Vault, {interaction.user.mention}! 🧪")
+
+# 6. EXECUTION
 if __name__ == "__main__":
-    threading.Thread(target=run_flask, daemon=True).start()
-    bot.run(TOKEN)
+    if not TOKEN:
+        print("ERROR: No DISCORD_TOKEN found in Environment Variables!")
+    else:
+        # Start the web server in a background thread
+        t = threading.Thread(target=run_flask)
+        t.daemon = True
+        t.start()
+        
+        # Start the Bot
+        bot.run(TOKEN)
