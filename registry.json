@@ -1,0 +1,14 @@
+﻿{
+    "owner_info": {
+        "guild_id": "1483266011728838719",
+        "owner_id": "1063556821517877258"
+    },
+    "authorized_guilds": [
+        {
+            "guild_name": "Arcane Main",
+            "guild_id": "1483266011728838719",
+            "publisher_role_id": "1485394568391295188",
+            "folder": "scripts/main"
+        }
+    ]
+}
