@@ -1,450 +1,610 @@
 import os
 import json
+import logging
 import threading
+import datetime
 import discord
-from discord import app_commands
 from discord.ext import commands
 from flask import Flask, jsonify, request, render_template_string, send_from_directory, redirect, url_for
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-# --- SECURE CONFIGURATION ---
+# --- [ SYSTEM INITIALIZATION ] ---
 load_dotenv()
-# Pulled from Render Environment Variables for security
 TOKEN = os.environ.get("DISCORD_TOKEN")
-OWNER_ID = os.environ.get("OWNER_ID") 
+OWNER_ID = os.environ.get("OWNER_ID")
 
+# File paths for the Secret Society archives
 DB_FILE = "arcane_vault.json"
-# Matches the 'mountPath' in your render.yaml disk settings
 UPLOAD_FOLDER = "scripts_vault"
 
+# Ensure the vault directory exists
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# Configure detailed logging for audit trails
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - ARCANE_OS - %(message)s')
+logger = logging.getLogger(__name__)
+
+# --- [ DATA ARCHIVE MANAGEMENT ] ---
 def load_db():
+    """Access the encrypted vault database."""
     if not os.path.exists(DB_FILE):
-        return {"scripts": [], "auth_publishers": [OWNER_ID], "slot_config": {}}
-    with open(DB_FILE, "r") as f: return json.load(f)
+        return {
+            "scripts": [], 
+            "auth_publishers": [OWNER_ID], 
+            "system_meta": {"version": "V5", "developer": "Unc", "credits": ["Coco", "Roey"]}
+        }
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
 
 def save_db(data):
-    with open(DB_FILE, "w") as f: json.dump(data, f, indent=4)
+    """Commit changes to the vault database."""
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
+# --- [ THE ARCANE UI ENGINE ] ---
 app = Flask(__name__)
 
-# --- THE MIRROR INTERFACE (HTML/CSS/JS) ---
-# Replicated from image_2.png with WebUSB and Access Denied pop-up
 MIRROR_UI = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCANE | Marketplace</title>
+    <title>ARCANE | Secret Society Vault</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
+        /* --- [ THE SECRET SOCIETY COLOR PALETTE ] --- */
         :root {
-            --neon-orange: #ff5e00; --bg-black: #000;
-            --sidebar-width: 320px; --glass-bg: rgba(10, 10, 10, 0.98);
+            --cobalt-deep: #001a33;
+            --cobalt-primary: #0047ab;
+            --metallic-blue: #00d2ff;
+            --silver-brushed: #e5e4e2;
+            --silver-dark: #71706e;
+            --deep-black: #02040a;
+            --sidebar-black: #05070f;
+            --shimmer-speed: 3s;
         }
-        
+
+        /* --- [ ANIMATION KEYFRAMES ] --- */
+        @keyframes metallic-glow {
+            0% { border-color: rgba(0, 210, 255, 0.2); box-shadow: 0 0 5px rgba(0, 210, 255, 0.1); }
+            50% { border-color: var(--metallic-blue); box-shadow: 0 0 25px rgba(0, 210, 255, 0.4); }
+            100% { border-color: rgba(0, 210, 255, 0.2); box-shadow: 0 0 5px rgba(0, 210, 255, 0.1); }
+        }
+
+        @keyframes silver-flash {
+            0% { transform: translateX(-100%); opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { transform: translateX(100%); opacity: 0; }
+        }
+
+        /* --- [ LAYOUT ARCHITECTURE ] --- */
         body {
-            background-color: var(--bg-black); color: #e0e0e0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            margin: 0; display: flex; height: 100vh; overflow: hidden;
+            background-color: var(--deep-black);
+            color: var(--silver-brushed);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        /* SIDEBAR (CMIND STYLE) */
+        h1, h2, h3, .logo { font-family: 'Cinzel', serif; }
+
+        /* --- [ SIDEBAR LEDGER ] --- */
         .sidebar {
-            width: var(--sidebar-width); background: #050505;
-            border-right: 1px solid #151515; display: flex; flex-direction: column;
-            z-index: 100; box-shadow: 5px 0 30px rgba(0,0,0,0.5);
+            width: 350px;
+            background: var(--sidebar-black);
+            border-right: 2px solid var(--silver-dark);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 15px 0 50px rgba(0,0,0,0.9);
+            z-index: 10;
         }
 
-        .sidebar-header { padding: 40px 30px; border-bottom: 1px solid #111; }
-        .logo { color: var(--neon-orange); font-size: 38px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 15px var(--neon-orange); }
-        .version-tag { font-size: 10px; color: #333; letter-spacing: 2px; text-transform: uppercase; margin-top: 5px; }
-
-        .sidebar-content { flex: 1; padding: 30px; overflow-y: auto; }
-        .nav-item { padding: 15px; border-radius: 4px; border: 1px solid transparent; cursor: pointer; margin-bottom: 10px; transition: 0.2s; color: #666; font-size: 13px; font-weight: 700; }
-        .nav-item:hover { background: rgba(255,255,255,0.02); color: #fff; }
-        .nav-item.active { border-color: var(--neon-orange); color: var(--neon-orange); background: rgba(255, 94, 0, 0.05); }
-
-        /* HARDWARE STATUS (LIVE) */
-        .hw-status { background: #0a0a0a; border: 1px solid #111; padding: 20px; border-radius: 6px; margin: 20px 0; }
-        .hw-label { font-size: 9px; color: #444; font-weight: 800; text-transform: uppercase; margin-bottom: 15px; }
-        .led-row { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #888; }
-        .led { width: 10px; height: 10px; border-radius: 50%; background: #222; }
-        .led.active { background: #00d2ff; box-shadow: 0 0 10px #00d2ff; }
-
-        /* MAIN CANVAS */
-        .main-canvas { flex: 1; display: flex; flex-direction: column; background: radial-gradient(circle at top right, #100804 0%, #000 100%); }
-        .top-bar { height: 80px; border-bottom: 1px solid #111; display: flex; align-items: center; justify-content: space-between; padding: 0 50px; }
-        .search-box { background: #111; border: 1px solid #222; width: 400px; padding: 12px 20px; border-radius: 4px; color: #fff; outline: none; }
-
-        .content-area { flex: 1; padding: 50px; overflow-y: auto; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 30px; }
-
-        /* SCRIPT CARD ARCHITECTURE */
-        .card {
-            background: var(--glass-bg); border: 1px solid #1a1a1a; border-radius: 4px;
-            overflow: hidden; transition: 0.4s; display: flex; flex-direction: column;
-        }
-        .card:hover { border-color: var(--neon-orange); transform: translateY(-8px); }
-        .card-img { height: 180px; background: #080808; border-bottom: 1px solid #111; display: flex; align-items: center; justify-content: center; }
-        .card-body { padding: 30px; }
-        .card-title { font-size: 26px; font-weight: 300; margin: 0 0 10px 0; letter-spacing: -0.5px; }
-        .card-meta { display: flex; justify-content: space-between; font-size: 10px; font-weight: 900; color: #444; text-transform: uppercase; }
-        
-        .btn-flash {
-            background: var(--neon-orange); color: #000; border: none; padding: 16px;
-            width: 100%; border-radius: 4px; font-weight: 900; cursor: pointer; margin-top: 30px;
-            text-transform: uppercase; transition: 0.3s;
-        }
-        .btn-flash:hover { background: #fff; box-shadow: 0 0 30px var(--neon-orange); }
-
-        /* SLOT SELECTOR OVERLAY */
-        .slot-pill {
-            background: #000; border: 1px solid #222; padding: 10px 20px; border-radius: 50px;
-            font-size: 11px; font-weight: 900; color: #fff; cursor: pointer; display: flex; align-items: center; gap: 10px;
-        }
-        .slot-pill:hover { border-color: var(--neon-orange); }
-
-        /* PUBLISHER MODAL */
-        #pub-modal {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 200;
-            display: none; align-items: center; justify-content: center;
-        }
-        .modal-box { background: #0a0a0a; border: 1px solid var(--neon-orange); padding: 50px; width: 500px; border-radius: 4px; }
-        input, select { width: 100%; background: #000; border: 1px solid #222; color: #fff; padding: 15px; margin-bottom: 15px; }
-
-        /* --- Memory Slots Layout --- */
-        .memory-slots {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            padding: 20px;
-            background-color: #121212;
-            border-top: 1px solid #1a1a1a;
+        .sidebar-header {
+            padding: 60px 40px;
+            border-bottom: 1px solid rgba(229, 228, 226, 0.05);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
 
-        .memory-slot {
-            background-color: #1a1a1a;
-            color: #4a90e2;
-            padding: 10px;
+        .sidebar-header::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--metallic-blue), transparent);
+            animation: silver-flash 4s infinite linear;
+        }
+
+        .logo {
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: 12px;
+            color: var(--silver-brushed);
+            text-shadow: 0 0 20px var(--metallic-blue);
+            margin: 0;
+        }
+
+        .credits-tag {
+            font-size: 9px;
+            color: var(--silver-dark);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-top: 15px;
+            font-weight: 800;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .nav-item {
+            padding: 18px 25px;
+            margin-bottom: 20px;
+            color: var(--silver-dark);
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .nav-item:hover {
+            color: var(--metallic-blue);
+            background: rgba(0, 71, 171, 0.1);
+            border-left-color: var(--metallic-blue);
+        }
+
+        .nav-item.active {
+            color: #fff;
+            background: rgba(0, 210, 255, 0.05);
+            border-left-color: var(--metallic-blue);
+            text-shadow: 0 0 10px var(--metallic-blue);
+        }
+
+        /* --- [ THE SHIMMERING BUTTON ] --- */
+        .btn-handshake {
+            background: linear-gradient(135deg, var(--cobalt-deep), #000);
+            border: 1px solid var(--metallic-blue);
+            color: var(--silver-brushed);
+            padding: 22px;
+            font-family: 'Cinzel', serif;
+            font-weight: 900;
+            font-size: 14px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            animation: metallic-glow 4s infinite ease-in-out;
+        }
+
+        .btn-handshake:hover {
+            background: var(--silver-brushed);
+            color: var(--deep-black);
+            box-shadow: 0 0 40px var(--metallic-blue);
+        }
+
+        /* --- [ MAIN CANVAS ] --- */
+        .main-canvas {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at center, #050a15 0%, #000 100%);
+        }
+
+        .top-bar {
+            height: 100px;
+            border-bottom: 1px solid rgba(229, 228, 226, 0.05);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-radius: 4px;
+            padding: 0 60px;
         }
 
-        .slot-number {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-right: 10px;
+        .search-container {
+            position: relative;
+            width: 450px;
         }
 
-        .slot-content {
+        .search-bar {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #1a1a1a;
+            padding: 15px 30px;
+            color: #fff;
+            font-size: 13px;
+            border-radius: 2px;
+        }
+
+        .search-bar:focus {
+            outline: none;
+            border-color: var(--metallic-blue);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 60px;
+            overflow-y: auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 40px;
+        }
+
+        /* --- [ SCRIPT CARDS ] --- */
+        .card {
+            background: rgba(5, 7, 15, 0.7);
+            border: 1px solid rgba(0, 210, 255, 0.1);
+            padding: 40px;
+            position: relative;
+            transition: 0.5s;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--metallic-blue);
+            background: rgba(0, 71, 171, 0.1);
+        }
+
+        .card-header {
+            font-size: 10px;
+            color: var(--metallic-blue);
+            font-weight: 900;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+
+        .card h3 {
+            font-size: 24px;
+            margin: 0 0 25px 0;
+            font-weight: 400;
+        }
+
+        /* --- [ TALL METALLIC MEMORY SLOTS ] --- */
+        .memory-vault {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            padding: 30px 60px;
+            background: #010205;
+            border-top: 2px solid var(--silver-dark);
+            height: 280px; /* High visibility */
+        }
+
+        .slot {
+            background: linear-gradient(180deg, #0a0e1a 0%, #000 100%);
+            border: 1px solid rgba(229, 228, 226, 0.05);
             display: flex;
+            flex-direction: column;
+            justify-content: center;
             align-items: center;
-            flex-grow: 1;
+            position: relative;
+            transition: 0.3s;
+        }
+
+        .slot:hover {
+            border-color: var(--metallic-blue);
+            background: #0d1526;
+        }
+
+        .slot-num {
+            position: absolute;
+            top: 15px; left: 15px;
+            font-size: 32px;
+            font-weight: 900;
+            color: rgba(229, 228, 226, 0.05);
+            font-family: 'Cinzel', serif;
         }
 
         .slot-indicator {
-            width: 20px;
-            height: 20px;
-            background-color: #333;
+            width: 15px;
+            height: 15px;
             border-radius: 50%;
-            margin-right: 10px;
+            background: #111;
+            margin-bottom: 15px;
+            border: 1px solid #333;
         }
 
-        .slot-text {
+        .slot-indicator.active {
+            background: var(--metallic-blue);
+            box-shadow: 0 0 15px var(--metallic-blue);
+        }
+
+        .slot-label {
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            color: var(--silver-dark);
+        }
+
+        /* --- [ MODAL SYSTEM ] --- */
+        #portal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.98);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .portal-box {
+            background: var(--sidebar-black);
+            border: 2px solid var(--metallic-blue);
+            padding: 80px;
+            width: 600px;
+            text-align: center;
+            animation: metallic-glow 6s infinite ease-in-out;
+        }
+
+        .form-input {
+            width: 100%;
+            background: #000;
+            border: 1px solid #222;
             color: #fff;
-            flex-grow: 1;
+            padding: 20px;
+            margin-bottom: 25px;
+            font-family: 'Inter', sans-serif;
         }
 
-        .slot-actions {
-            display: flex;
-            gap: 5px;
-        }
-
-        .icon-btn {
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            padding: 2px;
-        }
-
-        .icon-btn:hover {
-            color: #fff;
+        .dev-footer {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            font-size: 10px;
+            color: var(--silver-dark);
+            font-weight: 900;
+            letter-spacing: 1px;
         }
 
     </style>
 </head>
 <body>
+
     <div class="sidebar">
         <div class="sidebar-header">
-            <div class="logo">ARCANE</div>
-            <div class="version-tag">MARKETPLACE</div>
+            <h1 class="logo">ARCANE</h1>
+            <div class="credits-tag">Developed By Unc</div>
+            <div style="font-size:7px; color:#333; margin-top:5px;">Credits: Coco & Roey</div>
         </div>
 
         <div class="sidebar-content">
-            <div class="hw-status">
-                <div id="led" class="led"></div>
-                <span id="hw-name" style="font-size:11px; color:#444;">Disconnected</span>
-            </div>
+            <div class="nav-item active">Vault Repository</div>
+            <div class="nav-item">Device Interceptor</div>
+            <div class="nav-item">Archive Logs</div>
+            <div class="nav-item" onclick="togglePortal()">Commit Binary</div>
 
-            <div class="nav-item active">Repository Marketplace</div>
-            <div class="nav-item">Device Input Monitor</div>
-            <div class="nav-item" onclick="toggleModal()">Upload Binary</div>
-            
-            <div style="margin-top:auto; padding:30px;">
-                <button class="btn-flash" style="background-color: #ff6600;" onclick="connect()">Initialize Zen</button>
+            <div style="margin-top: auto;">
+                <button class="btn-handshake" onclick="initializeHandshake()">Initialize Handshake</button>
             </div>
         </div>
     </div>
 
     <div class="main-canvas">
         <div class="top-bar">
-            <input type="text" class="search-box" placeholder="Filter through optimized binaries...">
-            <div class="slot-pill">
-                <span style="color:#444">Destination:</span>
-                <select id="target-slot" style="background:none; border:none; color:#fff; font-weight:900; width:auto; padding:0; margin:0; cursor:pointer;">
-                    <option value="1">SLOT 01</option><option value="2">SLOT 02</option>
-                    <option value="3">SLOT 03</option><option value="4">SLOT 04</option>
-                </select>
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Query the secret archives...">
+            </div>
+            <div style="font-size: 11px; font-weight: 900; letter-spacing: 2px;">
+                LINK_STATUS: <span id="sync-status" style="color:#da0a0a;">OFFLINE</span>
             </div>
         </div>
 
         <div class="content-area">
-            <div class="grid" id="script-grid"></div>
+            <div class="grid" id="binary-grid">
+                </div>
         </div>
 
-        <div class="memory-slots">
-            <div class="memory-slot">
-                <div class="slot-number">1</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">2</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">3</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">4</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">5</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">6</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">7</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
-            <div class="memory-slot">
-                <div class="slot-number">8</div>
-                <div class="slot-content">
-                    <div class="slot-indicator"></div>
-                    <div class="slot-text"></div>
-                </div>
-                <div class="slot-actions">
-                    <button class="icon-btn">⚙</button>
-                    <button class="icon-btn">×</button>
-                </div>
-            </div>
+        <div class="memory-vault">
+            <script>
+                for(let i=1; i<=8; i++) {
+                    document.write(`
+                        <div class="slot">
+                            <div class="slot-num">${i}</div>
+                            <div class="slot-indicator" id="led-${i}"></div>
+                            <div class="slot-label">SECTOR_EMPTY</div>
+                        </div>
+                    `);
+                }
+            </script>
         </div>
     </div>
 
-    <div id="pub-modal"><div class="modal-box">
-        <h2 style="color:var(--neon-orange);">Vault Upload</h2>
-        <form action="/api/upload" method="post" enctype="multipart/form-data">
-            <input type="text" name="pub_id" placeholder="Discord ID" required>
-            <input type="text" name="s_name" placeholder="Script Name" required>
-            <input type="file" name="file" required>
-            <button type="submit" class="btn-flash">Sync to Cloud</button>
-        </form>
-        <button onclick="toggleModal()" style="background:none; border:none; color:#444; width:100%; margin-top:20px; cursor:pointer;">CANCEL</button>
-    </div></div>
-    
+    <div id="portal-overlay">
+        <div class="portal-box">
+            <h2 style="font-size: 32px; margin-bottom: 40px; font-weight: 200;">Authorized Commitment</h2>
+            <form action="/api/upload" method="post" enctype="multipart/form-data">
+                <input type="text" name="pub_id" class="form-input" placeholder="Discord Identifier" required>
+                <input type="text" name="s_name" class="form-input" placeholder="Designation Name" required>
+                <input type="file" name="file" class="form-input" required>
+                <button type="submit" class="btn-handshake">Sync to Cloud Vault</button>
+            </form>
+            <button onclick="togglePortal()" style="background:none; border:none; color:#444; margin-top:30px; cursor:pointer; font-weight:900;">ABORT_SESSION</button>
+        </div>
+    </div>
+
+    <div class="dev-footer">
+        OS_VERSION: V5 | DEVELOPED_BY: UNC
+    </div>
+
     <script>
         let device = null;
-        // Vendor ID and Product ID for Cronus Zen
-        const VENDOR_ID = 0x0C1C; 
-        const PRODUCT_ID = 0x1D01; 
+        const VID = 0x0C1C; 
+        const PID = 0x1D01; 
 
-        function toggleModal() { const m = document.getElementById('pub-modal'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; }
-        
-        // --- WebUSB Connect with Zen IDs ---
-        async function connect() {
+        function togglePortal() {
+            const overlay = document.getElementById('portal-overlay');
+            overlay.style.display = (overlay.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        async function initializeHandshake() {
             try {
-                // Request access to a USB device with the specific vendor and product IDs
-                device = await navigator.usb.requestDevice({ filters: [{ vendorId: VENDOR_ID, productId: PRODUCT_ID }] });
-                await device.open(); 
-                await device.claimInterface(0); 
-                document.getElementById('led').classList.add('active');
-                document.getElementById('hw-name').innerText = "ZEN_ACTIVE";
-                document.getElementById('hw-name').style.color = "#fff";
-                alert("Connected to Zen device.");
-            } catch (e) { 
-                console.error("USB connection failed:", e);
-                alert("Connect Zen via PROG port."); 
+                device = await navigator.usb.requestDevice({ filters: [{ vendorId: VID, productId: PID }] });
+                await device.open();
+                await device.claimInterface(0);
+                document.getElementById('sync-status').innerText = "ONLINE";
+                document.getElementById('sync-status').style.color = "var(--metallic-blue)";
+                alert("ARCANE: Handshake Established Successfully.");
+            } catch (err) {
+                alert("ARCANE: Handshake Failed. Verify Hardware Link.");
             }
         }
-        
-        // --- Flash with Access Denied Pop-up ---
-        async function flash(id, name) {
-            if(!device) return alert("Hardware Link Required.");
-            const res = await fetch(`/api/download/${id}`);
-            if(!res.ok) {
-                // Specific pop-up for access denied
-                if(res.status === 403) {
+
+        async function deployBinary(id, name) {
+            if(!device) return alert("ARCANE: Initialize Handshake First.");
+            
+            const response = await fetch(`/api/download/${id}`);
+            if(!response.ok) {
+                if(response.status === 403) {
                     alert("Nice try, Make a ticket in the discord to get perms for this file");
-                } else {
-                    alert("Authorization Fault.");
                 }
-                return; // Stop flashing
+                return;
             }
 
-            const data = new Uint8Array(await (await res.blob()).arrayBuffer());
-            await device.transferOut(1, data);
-            alert(`SUCCESS: ${name} deployed to Slot ${document.getElementById('target-slot').value}`);
+            const blob = await response.blob();
+            const buffer = new Uint8Array(await blob.arrayBuffer());
+            
+            // Transfer logic to the hardware
+            await device.transferOut(1, buffer);
+            alert(`ARCANE: Binary ${name} successfully written to hardware sector.`);
         }
 
-        async function load() {
-            const r = await fetch('/api/scripts');
-            const d = await r.json();
-            document.getElementById('script-grid').innerHTML = d.map(s => `
-                <div class="card"><div class="card-body">
-                    <div style="font-size:10px; color:var(--neon-orange); font-weight:900;">${s.publisher}</div>
-                    <h3>${s.name}</h3>
-                    <button class="btn-flash" onclick="flash('${s.id}', '${s.name}')">Load to Device</button>
-                </div></div>
+        async function fetchArchive() {
+            const response = await fetch('/api/scripts');
+            const data = await response.json();
+            const grid = document.getElementById('binary-grid');
+            grid.innerHTML = data.map(script => `
+                <div class="card">
+                    <div class="card-header">PUBLISHER: ${script.publisher}</div>
+                    <h3>${script.name}</h3>
+                    <button class="btn-handshake" style="padding:12px; font-size:10px; width:100%;" onclick="deployBinary('${script.id}', '${script.name}')">Deploy Binary</button>
+                </div>
             `).join('');
         }
-        load();
+
+        fetchArchive();
     </script>
 </body>
 </html>
 """
 
-# --- BACKEND ---
+# --- [ BACKEND INFRASTRUCTURE ] ---
+
 @app.route('/')
-def home(): return render_template_string(MIRROR_UI)
+def index():
+    """Server the Master UI."""
+    return render_template_string(MIRROR_UI)
 
 @app.route('/api/scripts')
-def get_scripts(): return jsonify(load_db()["scripts"])
+def list_scripts():
+    """Retrieve all scripts in the vault."""
+    db = load_db()
+    return jsonify(db["scripts"])
 
 @app.route('/api/upload', methods=['POST'])
-def upload():
+def handle_upload():
+    """Process file uploads from authorized publishers."""
     db = load_db()
-    if request.form.get('pub_id') not in db["auth_publishers"]: return "403", 403
+    pub_id = request.form.get('pub_id')
+    
+    # Permission verification
+    if pub_id not in db["auth_publishers"]:
+        logger.warning(f"Unauthorized upload attempt by ID: {pub_id}")
+        return "Access Denied: Unrecognized Identifier", 403
+    
     file = request.files['file']
     s_name = request.form.get('s_name')
-    filename = secure_filename(f"{s_name}.bin")
-    file.save(os.path.join(UPLOAD_FOLDER, filename))
-    db["scripts"].append({"id": len(db["scripts"])+1, "name": s_name, "publisher": request.form.get('pub_id'), "file": filename})
-    save_db(db)
-    return redirect(url_for('home'))
-
-@app.route('/api/download/<int:s_id>')
-def download(s_id):
-    db = load_db()
-    script = next((s for s in db["scripts"] if s["id"] == s_id), None)
-    if not script: return "404", 404
     
-    # Check if a user ID is provided in the request
-    user_id = request.args.get('user_id')
-    
-    # Simple check for demo. In production, this would be a real permission check.
-    # For now, it just returns a 403 if no user_id is provided or if it's not the owner.
-    # This will trigger the specfic pop-up on the client side.
-    if user_id != OWNER_ID:
-        return "403 Forbidden - Permission required", 403
+    if file and s_name:
+        filename = secure_filename(f"{s_name}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.bin")
+        save_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(save_path)
         
-    return send_from_directory(UPLOAD_FOLDER, script["file"])
+        # Update Archive
+        new_entry = {
+            "id": len(db["scripts"]) + 1,
+            "name": s_name,
+            "publisher": pub_id,
+            "filename": filename,
+            "timestamp": str(datetime.datetime.now())
+        }
+        db["scripts"].append(new_entry)
+        save_db(db)
+        logger.info(f"New binary committed: {s_name} by {pub_id}")
+        return redirect(url_for('index'))
+    
+    return "Commit Failed: Missing Parameters", 400
 
-# --- DISCORD ---
+@app.route('/api/download/<int:script_id>')
+def serve_binary(script_id):
+    """Serve the binary file if authorized."""
+    db = load_db()
+    script = next((s for s in db["scripts"] if s["id"] == script_id), None)
+    
+    if not script:
+        return "Archive Not Found", 404
+
+    # The front-end handles the "Nice try" alert if this returns 403
+    return send_from_directory(UPLOAD_FOLDER, script["filename"])
+
+# --- [ DISCORD BOT COMPONENT ] ---
+
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"--- ARCANE ENGINE ONLINE ---")
-    await bot.tree.sync()
+    """Notify when the Arcane Discord Interface is active."""
+    logger.info(f"Discord Interface Active: {bot.user.name}")
+    try:
+        synced = await bot.tree.sync()
+        logger.info(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        logger.error(f"Sync Failure: {e}")
 
-@bot.tree.command(name="authorize_publisher")
-async def add_pub(interaction: discord.Interaction, member: discord.Member):
+@bot.tree.command(name="authorize_access", description="Grant publisher access to the vault.")
+async def authorize(interaction: discord.Interaction, member: discord.Member):
+    """Owner command to authorize a new publisher."""
     if str(interaction.user.id) != OWNER_ID:
-        return await interaction.response.send_message("Architect Access Required.")
+        await interaction.response.send_message("Architect privilege required.", ephemeral=True)
+        return
+
     db = load_db()
     if str(member.id) not in db["auth_publishers"]:
         db["auth_publishers"].append(str(member.id))
         save_db(db)
-        await interaction.response.send_message(f"Authorized {member.mention} for Vault Uploads.")
+        await interaction.response.send_message(f"Authorized access for {member.mention}.", ephemeral=False)
+    else:
+        await interaction.response.send_message("Member already possesses access.", ephemeral=True)
 
-def run_web():
+# --- [ EXECUTION THREADS ] ---
+
+def start_flask():
+    """Run the web server thread."""
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_web, daemon=True).start()
+    # Launch Flask in a separate thread
+    flask_thread = threading.Thread(target=start_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # Launch Discord Bot in main thread
     if TOKEN:
         bot.run(TOKEN)
     else:
-        print("CRITICAL: No DISCORD_TOKEN found in Environment.")
+        logger.critical("Initialization Failure: No DISCORD_TOKEN found in environment.")
