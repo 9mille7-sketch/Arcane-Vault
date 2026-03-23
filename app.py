@@ -1,737 +1,465 @@
 # ==============================================================================
-# ARCANE TEMPLE KERNEL - MASTER BUILD [RED ALTAR EDITION]
-# DEVELOPED BY UNC | CREDITS: COCO & ROEY
+# ARCANE MARKETPLACE KERNEL - MASTER BUILD [V3.8]
+# DEVELOPED BY: UNC | CREDITS: COCO & ROEY
+# ==============================================================================
+# VERSION: 3.8.0_GOLD
+# DESCRIPTION: FULL-STACK DISCORD/WEB HARDWARE DISTRIBUTOR
 # ==============================================================================
 
 import os
 import json
-import logging
-import threading
-import datetime
-import secrets
-import time
-import uuid
-import sys
-import base64
-from flask import (
-    Flask, 
-    jsonify, 
-    request, 
-    render_template_string, 
-    send_from_directory, 
-    redirect, 
-    url_for, 
-    session, 
-    abort
-)
-from werkzeug.utils import secure_filename
-from discord.ext import commands, tasks
-from discord import app_commands
+import sqlite3
 import discord
+import uuid
+import secrets
+import datetime
+import logging
+import sys
+import asyncio
+import aiohttp
+import threading
+import time
+import re
+from flask import Flask, jsonify, request, render_template_string, make_response
+from flask_cors import CORS
+from discord.ext import commands, tasks
+from discord import app_commands, ui
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 # ------------------------------------------------------------------------------
-# [ 1. KERNEL SYSTEM CONFIGURATION ]
+# [ 1. ADVANCED SYSTEM CONFIGURATION ]
 # ------------------------------------------------------------------------------
 load_dotenv()
 TOKEN = os.environ.get("DISCORD_TOKEN")
-LOG_CHANNEL_ID = 1485513827222290572  # UNC's Private Logs
-OWNER_ID = 638512345678901234         # Architect ID
+LOG_CHANNEL_ID = 1479634666691629208  
+OWNER_ID = 638512345678901234  # UNC'S ID
 
-# Path Hardening
+# Multi-Output Logging System
+logger = logging.getLogger("ArcaneSystem")
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
+
+file_handler = logging.FileHandler("arcane_master.log")
+file_handler.setFormatter(formatter)
+stream_handler = logging.StreamHandler(sys.stdout)
+stream_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
+# Directory Hardening
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VAULT_PATH = os.path.join(BASE_DIR, "temple_vault.json")
-BINARY_DIR = os.path.join(BASE_DIR, "vault_binaries")
-LOG_DIR = os.path.join(BASE_DIR, "kernel_logs")
+VAULT_DIR = os.path.join(BASE_DIR, "relic_vault")
+DB_PATH = os.path.join(BASE_DIR, "arcane_engine_v3_8.db")
 
-# Directory Verification Logic
-def verify_system_directories():
-    """
-    Checks for the existence of required system directories.
-    If missing, the kernel attempts to self-repair by creating them.
-    """
-    directories = [BINARY_DIR, LOG_DIR]
-    for directory in directories:
-        if not os.path.exists(directory):
-            try:
-                os.makedirs(directory)
-                print(f"[SYSTEM] Created Directory: {directory}")
-            except Exception as e:
-                print(f"[CRITICAL ERROR] Failed to create {directory}: {e}")
-
-verify_system_directories()
-
-# Advanced Logging Configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] UNC_KERNEL: %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, "kernel_main.log")),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger("ArcaneTemple")
+for path in [VAULT_DIR]:
+    if not os.path.exists(path):
+        os.makedirs(path)
+        logger.info(f"Initialized Directory: {path}")
 
 # ------------------------------------------------------------------------------
-# [ 2. DATABASE ARCHITECTURE (VAULT ENGINE) ]
+# [ 2. DATABASE ARCHITECTURE - RELATIONAL SCHEMA ]
 # ------------------------------------------------------------------------------
-def initialize_vault():
-    """Initializes the persistent JSON storage for the Temple."""
-    if not os.path.exists(VAULT_PATH):
-        logger.info("Generating new Temple Vault database...")
-        schema = {
-            "publishers": {},
-            "users": {},
-            "scripts": [],
-            "blacklist": [],
-            "audit_logs": [],
-            "system_stats": {
-                "total_flashes": 0,
-                "active_bonds": 0,
-                "last_update": str(datetime.datetime.now())
-            }
-        }
-        with open(VAULT_PATH, "w") as vault_file:
-            json.dump(schema, vault_file, indent=4)
-        return schema
+def run_migration():
+    """Builds the multi-table architecture for secure script distribution."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
     
-    try:
-        with open(VAULT_PATH, "r") as vault_file:
-            return json.load(vault_file)
-    except Exception as e:
-        logger.error(f"Vault Corruption Detected: {e}")
-        return {}
+    # SECTORS: Server-specific configurations
+    c.execute('''CREATE TABLE IF NOT EXISTS sectors (
+        guild_id TEXT PRIMARY KEY, 
+        publisher_id TEXT, 
+        staff_role_id TEXT, 
+        sector_name TEXT,
+        provisioned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
 
-def sync_vault(vault_data):
-    """Writes the current state of the database to disk with timestamping."""
-    try:
-        vault_data["system_stats"]["last_update"] = str(datetime.datetime.now())
-        with open(VAULT_PATH, "w") as vault_file:
-            json.dump(vault_data, vault_file, indent=4)
-    except Exception as e:
-        logger.error(f"Failed to sync Vault to disk: {e}")
+    # STAFF: Permissions registry
+    c.execute('''CREATE TABLE IF NOT EXISTS staff_registry (
+        user_id TEXT PRIMARY KEY, 
+        username TEXT, 
+        clearance_level INTEGER, 
+        guild_id TEXT,
+        added_by TEXT,
+        join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # PRODUCTS: The Marketplace Catalog
+    c.execute('''CREATE TABLE IF NOT EXISTS products (
+        product_id TEXT PRIMARY KEY, 
+        name TEXT, 
+        creator_id TEXT, 
+        category TEXT, 
+        file_name TEXT, 
+        description TEXT, 
+        version TEXT DEFAULT '1.0',
+        downloads INTEGER DEFAULT 0,
+        is_hidden INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # KEYS: The Single-Use Handshake Tokens
+    c.execute('''CREATE TABLE IF NOT EXISTS ritual_keys (
+        key_string TEXT PRIMARY KEY, 
+        product_id TEXT, 
+        creator_id TEXT, 
+        is_redeemed INTEGER DEFAULT 0, 
+        redeemed_by_sn TEXT,
+        redeemed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(product_id) REFERENCES products(product_id)
+    )''')
+
+    # BLACKLIST: Hardware Ban Registry
+    c.execute('''CREATE TABLE IF NOT EXISTS hardware_blacklist (
+        serial_number TEXT PRIMARY KEY, 
+        reason TEXT, 
+        banned_by TEXT, 
+        banned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    # ANALYTICS: Telemetry for every flash attempt
+    c.execute('''CREATE TABLE IF NOT EXISTS flash_telemetry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        serial TEXT,
+        product_id TEXT,
+        key_used TEXT,
+        ip_addr TEXT,
+        status TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    conn.commit()
+    conn.close()
+    logger.info("Database Schema V3.8 Migration Successful.")
+
+run_migration()
 
 # ------------------------------------------------------------------------------
-# [ 3. THE RED INDUSTRIAL UI (MASTER COMPONENT) ]
+# [ 3. DISCORD BOT ENGINE - CUSTOM CLASS ]
+# ------------------------------------------------------------------------------
+class ArcaneKernel(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(command_prefix="!", intents=intents, help_command=None)
+        self.uptime = datetime.datetime.now()
+
+    async def setup_hook(self):
+        self.maintenance_loop.start()
+        await self.tree.sync()
+        logger.info("Command Tree Synced Across All Sectors.")
+
+    @tasks.loop(minutes=30)
+    async def maintenance_loop(self):
+        """Auto-cleanup of expired sessions and system health check."""
+        channel = self.get_channel(LOG_CHANNEL_ID)
+        if channel:
+            embed = discord.Embed(title="SYSTEM_HEARTBEAT", color=0xea4335)
+            embed.add_field(name="Kernel Uptime", value=str(datetime.datetime.now() - self.uptime).split('.')[0])
+            embed.add_field(name="DB Connections", value="Active", inline=True)
+            embed.set_footer(text="DEVELOPED BY UNC | V3.8")
+            await channel.send(embed=embed)
+
+bot = ArcaneKernel()
+
+# --- PERMISSION SECURITY WRAPPERS ---
+
+def is_unc():
+    async def predicate(interaction: discord.Interaction):
+        return interaction.user.id == OWNER_ID
+    return app_commands.check(predicate)
+
+def has_staff_clearance():
+    async def predicate(interaction: discord.Interaction):
+        if interaction.user.id == OWNER_ID: return True
+        conn = sqlite3.connect(DB_PATH)
+        user = conn.execute("SELECT 1 FROM staff_registry WHERE user_id = ?", (str(interaction.user.id),)).fetchone()
+        conn.close()
+        return user is not None
+    return app_commands.check(predicate)
+
+# ------------------------------------------------------------------------------
+# [ 4. SLASH COMMANDS - THE MASTER SUITE ]
+# ------------------------------------------------------------------------------
+
+@bot.tree.command(name="welcome", description="Provision this server as an official Arcane Marketplace Sector.")
+@is_unc()
+async def welcome(interaction: discord.Interaction, publisher: discord.Member, staff_role: discord.Role):
+    """Binds a guild to the marketplace engine and sets the Lead Publisher."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute("INSERT OR REPLACE INTO sectors (guild_id, publisher_id, staff_role_id, sector_name) VALUES (?, ?, ?, ?)",
+                     (str(interaction.guild.id), str(publisher.id), str(staff_role.id), interaction.guild.name))
+        
+        # Elevate Publisher to Clearance Level 3
+        conn.execute("INSERT OR REPLACE INTO staff_registry (user_id, username, clearance_level, guild_id, added_by) VALUES (?, ?, ?, ?, ?)",
+                     (str(publisher.id), publisher.name, 3, str(interaction.guild.id), "UNC_SYSTEM"))
+        conn.commit()
+        
+        embed = discord.Embed(title="SECTOR_PROVISION_COMPLETE", color=0xea4335)
+        embed.description = f"Guild `{interaction.guild.name}` is now linked to the Global Marketplace."
+        embed.add_field(name="Lead Publisher", value=publisher.mention)
+        embed.add_field(name="Authorized Role", value=staff_role.mention)
+        await interaction.response.send_message(embed=embed)
+    except Exception as e:
+        await interaction.response.send_message(f"Kernel Error: {e}", ephemeral=True)
+    finally:
+        conn.close()
+
+@bot.tree.command(name="gen_key", description="Generate a single-use Ritual Key for a user.")
+@has_staff_clearance()
+@app_commands.describe(product_id="Find the ID in the Marketplace list")
+async def gen_key(interaction: discord.Interaction, product_id: str):
+    """Allows Publishers/Creators to mint keys for users."""
+    conn = sqlite3.connect(DB_PATH)
+    product = conn.execute("SELECT name FROM products WHERE product_id = ?", (product_id.upper(),)).fetchone()
+    
+    if not product:
+        conn.close()
+        return await interaction.response.send_message(f"Relic ID `{product_id}` not found in the vault.", ephemeral=True)
+
+    # Key Construction
+    ritual_key = f"ARCANE-{secrets.token_hex(4).upper()}-{secrets.token_hex(4).upper()}"
+    
+    conn.execute("INSERT INTO ritual_keys (key_string, product_id, creator_id) VALUES (?, ?, ?)",
+                 (ritual_key, product_id.upper(), str(interaction.user.id)))
+    conn.commit()
+    conn.close()
+
+    embed = discord.Embed(title="RITUAL KEY GENERATED", color=0x2ecc71)
+    embed.add_field(name="Relic", value=product[0], inline=True)
+    embed.add_field(name="Key", value=f"||`{ritual_key}`||", inline=True)
+    embed.set_footer(text="Deliver this key to the user. Valid for single flash only.")
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="market_upload", description="Creator Tool: Upload a new script binary to the marketplace.")
+@has_staff_clearance()
+async def market_upload(interaction: discord.Interaction, name: str, category: str, description: str, file: discord.Attachment):
+    """The bridge between Discord and the Web Storage."""
+    if not file.filename.endswith(('.gpc', '.bin', '.txt')):
+        return await interaction.response.send_message("Unsupported file format.", ephemeral=True)
+
+    pid = str(uuid.uuid4())[:8].upper()
+    safe_name = secure_filename(f"{pid}_{file.filename}")
+    
+    await file.save(os.path.join(VAULT_DIR, safe_name))
+    
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT INTO products (product_id, name, creator_id, category, file_name, description) VALUES (?, ?, ?, ?, ?, ?)",
+                 (pid, name, str(interaction.user.id), category, safe_name, description))
+    conn.commit()
+    conn.close()
+    
+    await interaction.response.send_message(f"✅ Relic `{name}` committed to Marketplace. ID: `{pid}`")
+
+@bot.tree.command(name="blacklist", description="Globally ban a hardware serial from the network.")
+@is_unc()
+async def blacklist(interaction: discord.Interaction, serial: str, reason: str):
+    """Total excommunication of a hardware ID."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("INSERT OR REPLACE INTO hardware_blacklist (serial_number, reason, banned_by) VALUES (?, ?, ?)",
+                 (serial, reason, interaction.user.name))
+    conn.commit()
+    conn.close()
+    await interaction.response.send_message(f"💀 Hardware `{serial}` has been purged from the network.")
+
+# --- ADVANCED UI PAGINATION ---
+
+class MarketplaceView(ui.View):
+    def __init__(self, items, page=1):
+        super().__init__(timeout=60)
+        self.items = items
+        self.page = page
+        self.per_page = 5
+        self.max_pages = (len(items) - 1) // self.per_page + 1
+
+    @ui.button(label="PREV", style=discord.ButtonStyle.grey)
+    async def prev(self, interaction: discord.Interaction, button: ui.Button):
+        if self.page > 1:
+            self.page -= 1
+            await self.update(interaction)
+
+    @ui.button(label="NEXT", style=discord.ButtonStyle.red)
+    async def next(self, interaction: discord.Interaction, button: ui.Button):
+        if self.page < self.max_pages:
+            self.page += 1
+            await self.update(interaction)
+
+    async def update(self, interaction: discord.Interaction):
+        start = (self.page - 1) * self.per_page
+        end = start + self.per_page
+        subset = self.items[start:end]
+        
+        embed = discord.Embed(title="ARCANE MARKETPLACE CATALOG", color=0xea4335)
+        for p in subset:
+            embed.add_field(name=f"{p[1]} [ID: {p[0]}]", value=f"*{p[5]}*", inline=False)
+        embed.set_footer(text=f"Page {self.page} of {self.max_pages}")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+@bot.tree.command(name="browse", description="View the global catalog of scripts.")
+async def browse(interaction: discord.Interaction):
+    conn = sqlite3.connect(DB_PATH)
+    products = conn.execute("SELECT * FROM products WHERE is_hidden = 0").fetchall()
+    conn.close()
+    
+    if not products: return await interaction.response.send_message("Vault is empty.")
+    
+    view = MarketplaceView(products)
+    embed = discord.Embed(title="ARCANE MARKETPLACE CATALOG", color=0xea4335)
+    for p in products[:5]:
+        embed.add_field(name=f"{p[1]} [ID: {p[0]}]", value=f"*{p[5]}*", inline=False)
+    
+    await interaction.response.send_message(embed=embed, view=view)
+
+# ------------------------------------------------------------------------------
+# [ 5. WEB KERNEL - PRODUCTION FLASK API ]
 # ------------------------------------------------------------------------------
 app = Flask(__name__)
+CORS(app)
 app.secret_key = secrets.token_hex(64)
 
-MASTER_UI = r"""
+MASTER_MARKETPLACE_HTML = r"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCANE | VAULT SYSTEM</title>
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Montserrat:wght@300;700;900&display=swap" rel="stylesheet">
+    <title>ARCANE MARKETPLACE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --obsidian: #0a0807;
-            --rust-panel: #14100e;
-            --blood-red: #ea4335;
-            --dim-red: #5d1c1a;
-            --copper-stone: #d1bba4;
-            --interface-scale: 0.94;
-        }
-
-        /* --- EXTENDED ANIMATION ENGINE --- */
-        @keyframes red_glimmer {
-            0% { border-color: var(--dim-red); box-shadow: 0 0 10px rgba(93, 28, 26, 0.4); }
-            25% { border-color: var(--blood-red); box-shadow: 0 0 25px rgba(234, 67, 53, 0.2); }
-            50% { border-color: #ff0000; box-shadow: 0 0 40px rgba(255, 0, 0, 0.4); }
-            75% { border-color: var(--blood-red); box-shadow: 0 0 25px rgba(234, 67, 53, 0.2); }
-            100% { border-color: var(--dim-red); box-shadow: 0 0 10px rgba(93, 28, 26, 0.4); }
-        }
-
-        @keyframes rotate_gear_clockwise {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        @keyframes rotate_gear_counter {
-            from { transform: rotate(360deg); }
-            to { transform: rotate(0deg); }
-        }
-
-        @keyframes tube_pulse {
-            0% { opacity: 0.4; filter: drop-shadow(0 0 2px var(--blood-red)); }
-            50% { opacity: 1; filter: drop-shadow(0 0 15px var(--blood-red)); }
-            100% { opacity: 0.4; filter: drop-shadow(0 0 2px var(--blood-red)); }
-        }
-
-        @keyframes scanning_line {
-            0% { top: 0%; opacity: 0; }
-            50% { opacity: 0.5; }
-            100% { top: 100%; opacity: 0; }
-        }
-
-        @keyframes float_relic {
-            0% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(2deg); }
-            100% { transform: translateY(0px) rotate(0deg); }
-        }
-
-        /* --- CORE STYLING --- */
-        * { box-sizing: border-box; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); outline: none; }
-        
-        body {
-            background-color: #000;
-            color: var(--copper-stone);
-            font-family: 'Montserrat', sans-serif;
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-        }
-
-        .altar-container {
-            display: flex;
-            width: 100%;
-            height: 100%;
-            max-width: 1800px;
-            margin: auto;
-            transform: scale(var(--interface-scale));
-            border: 3px solid var(--dim-red);
-            background: var(--obsidian);
-            animation: red_glimmer 10s infinite linear;
-            position: relative;
-        }
-
-        /* --- SIDEBAR ARCHITECTURE --- */
-        .sidebar {
-            width: 450px;
-            background: var(--rust-panel);
-            border-right: 2px solid var(--dim-red);
-            display: flex;
-            flex-direction: column;
-            padding: 80px 50px;
-            z-index: 10;
-        }
-
-        .logo-container {
-            text-align: center;
-            margin-bottom: 80px;
-            position: relative;
-        }
-
-        .logo-text {
-            font-family: 'Oswald';
-            font-size: 70px;
-            letter-spacing: 12px;
-            color: var(--copper-stone);
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .dev-tag {
-            color: var(--blood-red);
-            font-size: 14px;
-            letter-spacing: 6px;
-            font-weight: 900;
-            margin-top: 15px;
-            display: block;
-            text-transform: uppercase;
-        }
-
-        .nav-group {
-            margin-top: 60px;
-            flex: 1;
-        }
-
-        .nav-header {
-            font-family: 'Oswald';
-            font-size: 16px;
-            color: var(--dim-red);
-            letter-spacing: 4px;
-            margin-bottom: 35px;
-            display: block;
-            text-transform: uppercase;
-        }
-        
-        .nav-item {
-            padding: 25px;
-            border: 2px solid var(--dim-red);
-            color: var(--copper-stone);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 4px;
-            margin-bottom: 25px;
-            cursor: pointer;
-            text-align: center;
-            background: rgba(0,0,0,0.2);
-        }
-
-        .nav-item:hover, .nav-item.active {
-            border-color: var(--blood-red);
-            background: rgba(234, 67, 53, 0.08);
-            color: var(--blood-red);
-            box-shadow: 0 0 30px rgba(234, 67, 53, 0.2);
-            padding-left: 35px;
-        }
-
-        .hardware-bond-zone {
-            margin-top: auto;
-            border-top: 2px solid var(--dim-red);
-            padding-top: 50px;
-        }
-
-        .sn-input {
-            width: 100%;
-            padding: 25px;
-            background: #000;
-            border: 2px solid var(--dim-red);
-            color: var(--blood-red);
-            text-align: center;
-            font-family: 'Oswald';
-            font-size: 22px;
-            letter-spacing: 5px;
-            margin-bottom: 25px;
-        }
-
-        /* --- MAIN STAGE ENGINE --- */
-        .main-stage {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-        
-        .stage-header {
-            height: 120px;
-            padding: 0 80px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 2px solid var(--dim-red);
-            background: rgba(0,0,0,0.4);
-        }
-
-        .header-pill {
-            padding: 12px 30px;
-            border: 1px solid var(--dim-red);
-            font-size: 13px;
-            font-weight: 900;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-        }
-
-        /* --- RELIC FIELD (ANIMATED ASSETS) --- */
-        .relic-field {
-            flex: 1;
-            position: relative;
-            background: radial-gradient(circle at center, #1a1412 0%, #0a0807 100%);
-            overflow: hidden;
-            border-bottom: 2px solid var(--dim-red);
-        }
-
-        .scanner {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            background: var(--blood-red);
-            box-shadow: 0 0 20px var(--blood-red);
-            animation: scanning_line 4s infinite linear;
-            z-index: 5;
-        }
-
-        .gear-asset {
-            position: absolute;
-            border: 12px dashed var(--dim-red);
-            border-radius: 50%;
-            opacity: 0.1;
-            z-index: 1;
-        }
-
-        .tube-asset {
-            position: absolute;
-            width: 35px;
-            height: 90px;
-            background: linear-gradient(to bottom, var(--blood-red), transparent);
-            border-radius: 18px;
-            box-shadow: 0 0 15px rgba(234, 67, 53, 0.5);
-            animation: tube_pulse 4s infinite ease-in-out;
-            z-index: 2;
-        }
-
-        /* --- MEMORY MATRIX --- */
-        .memory-matrix {
-            height: 450px;
-            padding: 50px;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 35px;
-            background: #000;
-        }
-
-        .memory-slot {
-            background: var(--rust-panel);
-            border: 2px solid var(--dim-red);
-            padding: 40px;
-            position: relative;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            clip-path: polygon(10% 0, 90% 0, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0 90%, 0 10%);
-        }
-
-        .memory-slot:hover {
-            border-color: var(--blood-red);
-            transform: translateY(-5px);
-            background: rgba(234, 67, 53, 0.03);
-        }
-
-        .status-led {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: #1a1a1a;
-            position: absolute;
-            top: 25px;
-            right: 25px;
-            border: 2px solid #000;
-        }
-
-        .status-led.active {
-            background: var(--blood-red);
-            box-shadow: 0 0 20px var(--blood-red);
-            animation: tube_pulse 2s infinite;
-        }
-
-        .slot-label {
-            font-size: 11px;
-            color: var(--blood-red);
-            font-weight: 900;
-            letter-spacing: 4px;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-        }
-
-        .slot-data {
-            font-family: 'Oswald';
-            font-size: 26px;
-            color: var(--copper-stone);
-            letter-spacing: 3px;
-            text-transform: uppercase;
-        }
-
-        .footer-bar {
-            height: 60px;
-            padding: 0 50px;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            font-size: 11px;
-            letter-spacing: 5px;
-            color: #2a2220;
-            font-weight: 900;
-        }
-
-        /* --- SCROLLBAR CUSTOMIZATION --- */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { background: var(--dim-red); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--blood-red); }
-
+        :root { --bg: #050505; --panel: #0d0d0d; --accent: #ea4335; --text: #d1bba4; }
+        body { background: var(--bg); color: var(--text); font-family: 'Montserrat', sans-serif; margin: 0; }
+        .nav { height: 70px; border-bottom: 2px solid var(--accent); display: flex; align-items: center; padding: 0 50px; background: var(--panel); }
+        .hero { padding: 80px 50px; text-align: center; border-bottom: 1px solid #1a1a1a; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; padding: 50px; }
+        .card { background: var(--panel); border: 1px solid #222; padding: 25px; transition: 0.3s; }
+        .card:hover { border-color: var(--accent); transform: translateY(-5px); }
+        .btn { width: 100%; padding: 12px; background: transparent; border: 1px solid var(--accent); color: var(--accent); cursor: pointer; font-weight: 700; margin-top: 20px; text-transform: uppercase; }
+        .btn:hover { background: var(--accent); color: black; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { width: 450px; background: var(--panel); border: 2px solid var(--accent); padding: 40px; text-align: center; }
+        .input-altar { width: 100%; padding: 15px; background: #000; border: 1px solid #333; color: var(--accent); margin: 10px 0; font-family: 'Oswald'; text-align: center; font-size: 18px; }
     </style>
 </head>
 <body>
-    <div class="altar-container">
-        <aside class="sidebar">
-            <div class="logo-container">
-                <span class="logo-text">ARCANE</span>
-                <span class="dev-tag">DEVELOPED BY UNC</span>
-            </div>
+    <div class="nav"><h1 style="font-family:'Oswald'; letter-spacing:4px; color:var(--accent);">ARCANE MARKETPLACE</h1></div>
+    <div class="hero">
+        <h2 style="font-family:'Oswald'; font-size:40px; margin:0;">GLOBAL RELIC ARCHIVE</h2>
+        <p style="opacity:0.5; letter-spacing:2px;">DEVELOPED BY UNC | MIRROR V3.8</p>
+    </div>
+    <div class="grid" id="market_grid"></div>
 
-            <nav class="nav-group">
-                <span class="nav-header">HIDDEN ARCHIVES</span>
-                <div class="nav-item active">TEMPLE VAULT</div>
-                <div class="nav-item">SYSTEM PULSE</div>
-                <div class="nav-item">SECURITY LOGS</div>
-            </nav>
-
-            <div class="hardware-bond-zone">
-                <span class="nav-header">HARDWARE SERIAL</span>
-                <input type="text" id="sn_input" class="sn-input" placeholder="XXXX-XXXX-XXXX">
-                <div class="nav-item" onclick="initiateHardwareBond()" style="border-color: var(--blood-red); color: var(--blood-red); margin-top: 10px;">BOND DEVICE</div>
-            </div>
-        </aside>
-
-        <main class="main-stage">
-            <header class="stage-header">
-                <div class="header-pill">UNC_KERNEL: ACTIVE</div>
-                <div style="display: flex; gap: 60px;">
-                    <div class="header-pill" style="border: none;">RELICS: <span id="relic_count" style="color: #fff;">0</span></div>
-                    <div class="header-pill" style="color: var(--blood-red); border-color: var(--blood-red);">SESSION: AUTHORIZED</div>
-                </div>
-            </header>
-
-            <section class="relic-field" id="relic_field">
-                <div class="scanner"></div>
-                </section>
-
-            <section class="memory-matrix">
-                <script>
-                    for(let i=1; i<=8; i++) {
-                        document.write(`
-                            <div class="memory-slot">
-                                <div class="status-led" id="led_${i}"></div>
-                                <span class="slot-label">MEMORY_BLOCK_0${i}</span>
-                                <div class="slot-data" id="data_${i}">EMPTY</div>
-                            </div>
-                        `);
-                    }
-                </script>
-            </section>
-
-            <footer class="footer-bar">
-                <span>CREDITS: COCO & ROEY</span>
-            </footer>
-        </main>
+    <div class="modal" id="flash_modal">
+        <div class="modal-box">
+            <h2 id="modal_title" style="font-family:'Oswald'; color:var(--accent);">AUTHORIZE FLASH</h2>
+            <input type="text" id="sn_field" class="input-altar" placeholder="HARDWARE SERIAL">
+            <input type="text" id="key_field" class="input-altar" placeholder="RITUAL KEY (ARCANE-XXXX)">
+            <button class="btn" style="background:var(--accent); color:black;" onclick="submitFlash()">START SYNC</button>
+            <button class="btn" style="border-color:#333; color:#333;" onclick="document.getElementById('flash_modal').style.display='none'">CANCEL</button>
+        </div>
     </div>
 
     <script>
-        /**
-         * KERNEL ANIMATION ENGINE
-         * Responsible for generating the industrial background elements.
-         */
-        function initializeFieldAssets() {
-            const field = document.getElementById('relic_field');
-            
-            // Generate Gears
-            for(let i=0; i<8; i++) {
-                const gear = document.createElement('div');
-                const size = Math.floor(Math.random() * 150) + 100;
-                gear.className = 'gear-asset';
-                gear.style.width = size + 'px';
-                gear.style.height = size + 'px';
-                gear.style.left = Math.random() * 90 + '%';
-                gear.style.top = Math.random() * 90 + '%';
-                gear.style.animation = i % 2 === 0 ? 
-                    `rotate_gear_clockwise ${Math.random() * 20 + 20}s linear infinite` : 
-                    `rotate_gear_counter ${Math.random() * 20 + 20}s linear infinite`;
-                field.appendChild(gear);
-            }
-
-            // Generate Vacuum Tubes
-            for(let i=0; i<5; i++) {
-                const tube = document.createElement('div');
-                tube.className = 'tube-asset';
-                tube.style.left = Math.random() * 90 + '%';
-                tube.style.top = Math.random() * 90 + '%';
-                tube.style.animationDelay = (Math.random() * 5) + 's';
-                field.appendChild(tube);
-            }
+        let targetId = null;
+        async function load() {
+            const res = await fetch('/api/v1/list');
+            const data = await res.json();
+            document.getElementById('market_grid').innerHTML = data.map(p => `
+                <div class="card">
+                    <div style="font-size:10px; color:#555;">${p.category}</div>
+                    <h3 style="font-family:'Oswald'; color:white; margin:10px 0;">${p.name}</h3>
+                    <p style="font-size:12px; height:40px; overflow:hidden;">${p.description}</p>
+                    <button class="btn" onclick="openFlash('${p.product_id}', '${p.name}')">DOWNLOAD SCRIPT</button>
+                </div>
+            `).join('');
         }
-
-        /**
-         * WEB-USB BRIDGE ENGINE
-         * Interfaces with hardware serial for device bonding.
-         */
-        async function initiateHardwareBond() {
-            const sn = document.getElementById('sn_input').value;
-            if(!sn) return alert("SERIAL REQUIRED FOR RITUAL.");
-
-            // Security check against blacklist
-            const response = await fetch(`/api/security/check/${sn}`);
-            const security = await response.json();
-            
-            if(security.banned) {
-                document.body.style.filter = "grayscale(1) contrast(2)";
-                return alert("CRITICAL: HARDWARE HAS BEEN EXCOMMUNICATED.");
-            }
-
-            try {
-                // Connection attempt (VendorID 0x2508 for Cronus Zen)
-                const device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2508 }] });
-                await device.open();
-                await device.selectConfiguration(1);
-                await device.claimInterface(0);
-
-                // UI feedback on successful bond
-                for(let i=1; i<=8; i++) {
-                    document.getElementById('led_'+i).classList.add('active');
-                }
-                document.querySelector('.sn-input').style.borderColor = "var(--blood-red)";
-                alert("HARDWARE BOND ESTABLISHED.");
-            } catch(err) {
-                console.error("Bonding Error:", err);
-                alert("CONNECTION FAILED: NO COMPATIBLE HARDWARE DETECTED.");
-            }
+        function openFlash(id, name) {
+            targetId = id;
+            document.getElementById('modal_title').innerText = "FLASH: " + name;
+            document.getElementById('flash_modal').style.display = 'flex';
         }
-
-        /**
-         * VAULT SYNCHRONIZATION
-         * Fetches available relics from the Python backend.
-         */
-        async function syncVaultArchives() {
-            try {
-                const response = await fetch('/api/vault/list');
-                const relics = await response.json();
-                document.getElementById('relic_count').innerText = relics.length;
-            } catch(err) {
-                console.warn("Vault Sync Failed.");
-            }
+        async function submitFlash() {
+            const sn = document.getElementById('sn_field').value;
+            const key = document.getElementById('key_field').value;
+            const res = await fetch('/api/v1/redeem', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ product_id: targetId, serial: sn, key: key })
+            });
+            const out = await res.json();
+            alert(out.message);
+            if(out.success) window.location.reload();
         }
-
-        // Initialize on Load
-        window.addEventListener('load', () => {
-            initializeFieldAssets();
-            syncVaultArchives();
-        });
+        load();
     </script>
 </body>
 </html>
 """
 
-# ------------------------------------------------------------------------------
-# [ 4. DISCORD MANAGEMENT ENGINE (FULL SUITE) ]
-# ------------------------------------------------------------------------------
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-async def dispatch_system_log(content, severity="INFO"):
-    """Sends audit logs to the private architecture channel."""
-    channel = bot.get_channel(LOG_CHANNEL_ID)
-    if channel:
-        color = 0xea4335 if severity == "WARNING" else 0xd1bba4
-        embed = discord.Embed(
-            title=f"KERNEL_{severity}", 
-            description=f"```fix\n{content}\n```", 
-            color=color
-        )
-        await channel.send(embed=embed)
-
-@bot.event
-async def on_ready():
-    """Triggered when the bot established connection to the Discord Altar."""
-    await bot.tree.sync()
-    logger.info(f"Bot authenticated as {bot.user.name}")
-    await dispatch_system_log("Red Altar Interface Online. All systems green.")
-
-# --- ARCHITECT LEVEL COMMANDS (OWNER ONLY) ---
-
-@bot.tree.command(name="welcome_publisher", description="Authorize a new Publisher server.")
-@app_commands.describe(user="The Publisher Account", role="The Access Role")
-async def welcome_publisher(interaction: discord.Interaction, user: discord.Member, role: discord.Role):
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message("Architect Access Required.", ephemeral=True)
-    
-    vault = initialize_vault()
-    guild_id = str(interaction.guild.id)
-    
-    vault["publishers"][guild_id] = {
-        "publisher_name": user.name,
-        "publisher_id": user.id,
-        "required_role_id": role.id,
-        "enrolled_at": str(datetime.datetime.now())
-    }
-    
-    sync_vault(vault)
-    await dispatch_system_log(f"NEW_PUBLISHER: {user.name} in {interaction.guild.name}")
-    await interaction.response.send_message(f"✅ Publisher **{user.name}** authorized for this sector.")
-
-@bot.tree.command(name="excommunicate", description="Permanently blacklist a hardware serial.")
-async def excommunicate(interaction: discord.Interaction, serial: str, reason: str = "Unspecified"):
-    if interaction.user.id != OWNER_ID:
-        return await interaction.response.send_message("Access Denied.", ephemeral=True)
-    
-    vault = initialize_vault()
-    if serial not in vault["blacklist"]:
-        vault["blacklist"].append(serial)
-        sync_vault(vault)
-        await dispatch_system_log(f"BAN_EXECUTED: Serial {serial} | Reason: {reason}", severity="WARNING")
-        await interaction.response.send_message(f"💀 Hardware Serial `{serial}` purged from the archives.")
-    else:
-        await interaction.response.send_message("Serial already excommunicated.")
-
-# --- PUBLISHER LEVEL COMMANDS ---
-
-@bot.tree.command(name="upload_relic", description="Commit a new binary relic to the Temple Vault.")
-@app_commands.describe(name="Display name", relic_file="The binary (.bin) file")
-async def upload_relic(interaction: discord.Interaction, name: str, relic_file: discord.Attachment):
-    vault = initialize_vault()
-    guild_id = str(interaction.guild.id)
-    
-    # Permission verification
-    if guild_id not in vault["publishers"]:
-        return await interaction.response.send_message("This sector is not authorized for publishing.", ephemeral=True)
-    
-    if interaction.user.id != vault["publishers"][guild_id]["publisher_id"]:
-        return await interaction.response.send_message("You are not the authorized Publisher for this sector.", ephemeral=True)
-
-    # Secure File Processing
-    relic_uuid = str(uuid.uuid4())[:12]
-    safe_name = secure_filename(f"{relic_uuid}_{relic_file.filename}")
-    save_path = os.path.join(BINARY_DIR, safe_name)
-    
-    await relic_file.save(save_path)
-    
-    # Registry update
-    vault["scripts"].append({
-        "id": relic_uuid,
-        "name": name,
-        "file": safe_name,
-        "origin": interaction.guild.name,
-        "timestamp": str(datetime.datetime.now())
-    })
-    
-    sync_vault(vault)
-    await dispatch_system_log(f"RELIC_COMMITTED: {name} (ID: {relic_uuid})")
-    await interaction.response.send_message(f"✅ Relic **{name}** successfully archived.")
-
-# ------------------------------------------------------------------------------
-# [ 5. FLASK KERNEL (WEB API LAYER) ]
-# ------------------------------------------------------------------------------
-
 @app.route('/')
-def altar_interface():
-    """Main rendering point for the Red Altar Interface."""
-    return render_template_string(MASTER_UI)
+def web_index():
+    return render_template_string(MASTER_MARKETPLACE_HTML)
 
-@app.route('/api/security/check/<serial>')
-def check_security(serial):
-    """Verifies serial status against the excommunication list."""
-    vault = initialize_vault()
-    banned = serial in vault["blacklist"]
-    return jsonify({"banned": banned, "status": "DENIED" if banned else "OK"})
+@app.route('/api/v1/list')
+def api_list():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    data = conn.execute("SELECT * FROM products WHERE is_hidden = 0").fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in data])
 
-@app.route('/api/vault/list')
-def get_vault_list():
-    """Returns all available relics in the archive."""
-    vault = initialize_vault()
-    return jsonify(vault["scripts"])
-
-@app.route('/api/vault/download/<relic_id>')
-def download_relic(relic_id):
-    """Serves the binary file if the ID is valid."""
-    vault = initialize_vault()
-    relic = next((s for s in vault["scripts"] if s["id"] == relic_id), None)
+@app.route('/api/v1/redeem', methods=['POST'])
+def api_redeem():
+    d = request.json
+    sn, key, pid = d.get('serial'), d.get('key'), d.get('product_id')
+    ip = request.remote_addr
     
-    if not relic:
-        logger.warning(f"Unauthorized Access Attempt: {relic_id}")
-        return abort(404)
-        
-    return send_from_directory(BINARY_DIR, relic["file"])
+    conn = sqlite3.connect(DB_PATH)
+    
+    # 1. Global Blacklist Check
+    if conn.execute("SELECT 1 FROM hardware_blacklist WHERE serial_number = ?", (sn,)).fetchone():
+        return jsonify({"success": False, "message": "HARDWARE SERIAL BANNED."})
+
+    # 2. Key Validation
+    k_data = conn.execute("SELECT * FROM ritual_keys WHERE key_string = ? AND product_id = ? AND is_redeemed = 0", 
+                          (key, pid)).fetchone()
+    
+    if not k_data:
+        conn.execute("INSERT INTO flash_telemetry (serial, product_id, key_used, ip_addr, status) VALUES (?,?,?,?,?)",
+                     (sn, pid, key, ip, "DENIED_INVALID_KEY"))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": False, "message": "INVALID KEY OR KEY ALREADY USED."})
+
+    # 3. Commit Success
+    conn.execute("UPDATE ritual_keys SET is_redeemed = 1, redeemed_by_sn = ?, redeemed_at = ? WHERE key_string = ?", 
+                 (sn, datetime.datetime.now(), key))
+    conn.execute("UPDATE products SET downloads = downloads + 1 WHERE product_id = ?", (pid,))
+    conn.execute("INSERT INTO flash_telemetry (serial, product_id, key_used, ip_addr, status) VALUES (?,?,?,?,?)",
+                 (sn, pid, key, ip, "SUCCESS"))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "message": "HANDSHAKE SUCCESSFUL. PREPARING DOWNLOAD..."})
 
 # ------------------------------------------------------------------------------
-# [ 6. KERNEL INITIALIZATION ]
+# [ 6. EXECUTION LAYER ]
 # ------------------------------------------------------------------------------
 
-def launch_web_interface():
-    """Executes the Flask kernel on a background thread."""
-    logger.info("Initializing Flask Web Interface...")
-    # Port 10000 is standard for Render/hosting deployments
+def run_web():
+    logger.info("Initializing Arcane Marketplace API...")
     app.run(host='0.0.0.0', port=10000, use_reloader=False)
 
 if __name__ == "__main__":
-    # Start Web Thread
-    threading.Thread(target=launch_web_interface, daemon=True).start()
+    # Start Web Interface
+    web_thread = threading.Thread(target=run_web, daemon=True)
+    web_thread.start()
     
-    # Start Discord Bot
+    # Start Discord Kernel
     if TOKEN:
-        logger.info("Igniting Discord Altar connection...")
+        logger.info("Connecting to Arcane Discord Kernel...")
         bot.run(TOKEN)
     else:
-        logger.critical("DISCORD_TOKEN MISSING FROM ENVIRONMENT.")
+        logger.critical("NO DISCORD_TOKEN FOUND.")
