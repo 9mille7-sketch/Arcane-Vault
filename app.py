@@ -14,359 +14,257 @@ import discord
 from dotenv import load_dotenv
 
 # ==============================================================================
-# [ 1. KERNEL & ENVIRONMENT ARCHITECTURE ]
+# [ 1. KERNEL & IDENTITY CONFIGURATION ]
 # ==============================================================================
 load_dotenv()
 TOKEN = os.environ.get("DISCORD_TOKEN")
-OWNER_ID = "638512345678901234" # Brian Miller / Lead Architect
-VERSION = "V5.6.8-STABLE"
+# Identity: UNC (Lead Developer)
+LEAD_DEV = "UNC"
+OWNER_ID = "638512345678901234" 
+VERSION = "V5.7.5-UNC-IMPERIAL"
 
-# File System Configuration
+# File System Integrity
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VAULT_PATH = os.path.join(BASE_DIR, "arcane_vault.json")
+VAULT_PATH = os.path.join(BASE_DIR, "unc_vault.json")
 BINARY_DIR = os.path.join(BASE_DIR, "vault_binaries")
-LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_DIR = os.path.join(BASE_DIR, "system_logs")
 
-# Ensure environment is primed
 for path in [BINARY_DIR, LOG_DIR]:
     if not os.path.exists(path):
         os.makedirs(path)
 
-# Advanced Logging System
+# Professional Kernel Logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] ARCANE_CORE: %(message)s',
+    format='%(asctime)s [%(levelname)s] UNC_CORE: %(message)s',
     handlers=[
-        logging.FileHandler(os.path.join(LOG_DIR, "kernel.log")),
+        logging.FileHandler(os.path.join(LOG_DIR, "kernel_main.log")),
         logging.StreamHandler(sys.stdout)
     ]
 )
-logger = logging.getLogger("ArcaneCore")
+logger = logging.getLogger("ArcaneImperial")
 
 # ==============================================================================
-# [ 2. SECURE VAULT ENGINE ]
+# [ 2. DATABASE ENGINE ]
 # ==============================================================================
-def initialize_vault():
+def initialize_database():
     if not os.path.exists(VAULT_PATH):
-        initial_data = {
+        schema = {
             "scripts": [],
-            "authorized_publishers": [OWNER_ID],
-            "system_stats": {"total_flashes": 0, "unique_visitors": 0},
-            "registry": {"created_at": str(datetime.datetime.now()), "version": VERSION}
+            "auth_ids": [OWNER_ID],
+            "global_stats": {"flashes": 0, "uptime": str(datetime.datetime.now())}
         }
         with open(VAULT_PATH, "w") as f:
-            json.dump(initial_data, f, indent=4)
-        return initial_data
-    
+            json.dump(schema, f, indent=4)
+        return schema
     with open(VAULT_PATH, "r") as f:
         return json.load(f)
 
-def update_vault(data):
+def commit_to_db(data):
     with open(VAULT_PATH, "w") as f:
         json.dump(data, f, indent=4)
 
 # ==============================================================================
-# [ 3. THE GILDED INTERFACE (FULL-SCALE CSS & HTML) ]
+# [ 3. THE IMPERIAL UI (BLUE/GOLD MARBLE | ZERO ORANGE) ]
 # ==============================================================================
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(64)
 
-# This block represents the core visual identity
-MASTER_UI_CORE = r"""
+MASTER_UI_TEMPLATE = r"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCANE REPOSITORY | V5.6.8</title>
+    <title>ARCANE | DEVELOPED BY UNC</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
-        /* --- [ CSS MASTER ENGINE: BLUE, GOLD & NIGHTMARE ] --- */
+        /* --- [ IMPERIAL COLOR SYSTEM ] --- */
         :root {
-            --cobalt: #00d2ff;
-            --gold: #ffd700;
-            --arcane-orange: #ff6600;
-            --deep-black: #020205;
-            --panel-bg: rgba(5, 7, 12, 0.98);
-            --marble-url: url('https://i.ibb.co/3c1baac1/marble.png'); /* User provided high-res texture */
+            --royal-blue: #002244;
+            --electric-cyan: #00d2ff;
+            --imperial-gold: #d4af37;
+            --deep-void: #010103;
+            --marble-bg: url('https://i.ibb.co/L9Y0Y5r/marble-texture.png');
+            --glass: rgba(0, 10, 30, 0.96);
         }
 
-        * { box-sizing: border-box; outline: none; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        * { box-sizing: border-box; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; }
         
         body {
-            background: linear-gradient(rgba(0, 0, 10, 0.85), rgba(0, 0, 0, 0.95)), var(--marble-url);
-            background-size: cover;
-            background-attachment: fixed;
-            background-position: center;
-            color: #fff;
-            font-family: 'Montserrat', sans-serif;
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-            border: 2px solid #111;
+            background: linear-gradient(rgba(0, 5, 20, 0.9), rgba(0, 0, 0, 0.98)), var(--marble-bg);
+            background-size: cover; background-attachment: fixed;
+            color: #ffffff; font-family: 'Montserrat', sans-serif;
+            margin: 0; height: 100vh; display: flex; overflow: hidden;
+            border: 2px solid var(--imperial-gold);
         }
 
-        /* --- [ SIDEBAR: CMIND DESIGN LANGUAGE ] --- */
+        /* --- [ SIDEBAR: AUTHENTIC UNC BRANDING ] --- */
         .sidebar {
-            width: 400px;
-            background: var(--panel-bg);
-            border-right: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            flex-direction: column;
-            z-index: 100;
-            backdrop-filter: blur(30px);
-            box-shadow: 15px 0 50px rgba(0,0,0,0.9);
+            width: 440px; background: var(--glass);
+            border-right: 2px solid var(--imperial-gold);
+            display: flex; flex-direction: column; z-index: 100;
+            backdrop-filter: blur(45px);
+            box-shadow: 25px 0 100px rgba(0,0,0,0.9);
         }
 
-        .sidebar-header {
-            padding: 70px 45px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
+        .sidebar-brand { padding: 90px 60px; border-bottom: 1px solid rgba(212, 175, 55, 0.1); }
         .logo-main {
-            font-family: 'Cinzel', serif;
-            font-size: 52px;
-            font-weight: 900;
-            letter-spacing: 8px;
-            color: var(--arcane-orange);
-            text-shadow: 0 0 25px rgba(255, 102, 0, 0.4);
-            margin: 0;
+            font-family: 'Cinzel', serif; font-size: 52px; font-weight: 900;
+            letter-spacing: 12px; color: var(--imperial-gold);
+            text-shadow: 0 0 35px rgba(212, 175, 55, 0.4); margin: 0;
+        }
+        .dev-tag {
+            font-size: 11px; color: var(--electric-cyan); letter-spacing: 6px;
+            font-weight: 900; margin-top: 20px; text-transform: uppercase;
         }
 
-        .logo-sub {
-            font-size: 9px;
-            color: #444;
-            letter-spacing: 4px;
-            font-weight: 900;
-            text-transform: uppercase;
-            margin-top: 15px;
-        }
-
-        .nav-stack { flex: 1; padding: 50px 45px; }
+        .nav-menu { flex: 1; padding: 70px 60px; }
+        .nav-section-title { font-size: 12px; color: #1a2a3a; font-weight: 900; letter-spacing: 5px; margin-bottom: 45px; display: block; }
         
-        .nav-group-label {
-            font-size: 10px;
-            color: #222;
-            font-weight: 900;
-            letter-spacing: 2px;
-            margin-bottom: 30px;
-            display: block;
+        .nav-item {
+            display: flex; align-items: center; padding: 26px;
+            color: #556677; font-weight: 900; text-decoration: none;
+            font-size: 14px; border-radius: 4px; margin-bottom: 20px;
+            border: 1px solid transparent; cursor: pointer;
+        }
+        .nav-item:hover, .nav-item.active {
+            color: var(--electric-cyan); background: rgba(0, 210, 255, 0.04);
+            border-color: var(--imperial-gold);
         }
 
-        .nav-btn {
-            display: flex;
-            align-items: center;
-            padding: 20px;
-            color: #666;
-            font-weight: 900;
-            text-decoration: none;
-            font-size: 12px;
-            border-radius: 2px;
-            margin-bottom: 12px;
-            border: 1px solid transparent;
-            cursor: pointer;
+        /* --- [ STAGE: CONTENT AREA ] --- */
+        .stage { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .top-deck {
+            height: 120px; padding: 0 80px; display: flex; align-items: center; justify-content: space-between;
+            background: rgba(0,0,0,0.6); border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+        }
+        .search-input {
+            width: 550px; background: #000; border: 1px solid #111;
+            padding: 24px 40px; color: #fff; border-radius: 6px; font-size: 16px;
         }
 
-        .nav-btn:hover, .nav-btn.active {
-            color: var(--arcane-orange);
-            background: rgba(255, 102, 0, 0.05);
-            border-color: var(--arcane-orange);
+        .main-gallery {
+            flex: 1; padding: 100px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 70px; overflow-y: auto;
         }
 
-        /* --- [ MAIN STAGE INTERFACE ] --- */
-        .stage {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-
-        .stage-top {
-            height: 100px;
-            padding: 0 60px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: rgba(0,0,0,0.4);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .search-field {
-            width: 450px;
-            background: #000;
-            border: 1px solid #111;
-            padding: 20px 25px;
-            color: #fff;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .grid-scroller {
-            flex: 1;
-            padding: 65px;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-            gap: 45px;
-            overflow-y: auto;
-        }
-
-        /* --- [ REINFORCED 8-SLOT HARDWARE GRID ] --- */
+        /* --- [ HARDWARE TRAY: 8-SLOT REFERENCE ] --- */
         .hardware-tray {
-            height: 350px;
-            background: rgba(5, 6, 10, 0.98);
-            border-top: 2px solid #111;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            height: 400px; background: #000;
+            border-top: 3px solid var(--imperial-gold);
+            display: grid; grid-template-columns: repeat(4, 1fr);
             grid-template-rows: repeat(2, 1fr);
-            padding: 20px;
-            gap: 15px;
+            padding: 30px; gap: 25px;
         }
 
-        .mem-slot {
-            background: rgba(18, 22, 30, 0.85);
-            border: 1px solid #1a1a1a;
-            display: flex;
-            align-items: center;
-            padding: 30px;
-            position: relative;
+        .slot-box {
+            background: rgba(5, 12, 25, 0.95);
+            border: 1px solid rgba(212, 175, 55, 0.15);
+            display: flex; align-items: center; padding: 40px;
+            position: relative; overflow: hidden;
+        }
+        .slot-box:hover { border-color: var(--imperial-gold); background: rgba(0, 20, 50, 0.95); }
+
+        .slot-giant-num {
+            font-family: 'Montserrat', sans-serif; font-size: 110px; font-weight: 900;
+            color: var(--imperial-gold); opacity: 0.1;
+            position: absolute; left: 20px; z-index: 1;
         }
 
-        .mem-id-huge {
-            font-family: 'Montserrat', sans-serif;
-            font-size: 85px;
-            font-weight: 900;
-            color: var(--cobalt);
-            opacity: 0.5;
-            position: absolute;
-            left: 20px;
-            z-index: 1;
+        .slot-data { margin-left: 120px; z-index: 5; }
+        .slot-header { font-size: 11px; color: var(--electric-cyan); font-weight: 900; letter-spacing: 5px; }
+        .slot-name { font-size: 14px; color: #fff; font-weight: 700; margin-top: 10px; text-transform: uppercase; }
+
+        .led-status {
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #100000; position: absolute; top: 30px; right: 30px;
+            border: 2px solid #200;
         }
-
-        .mem-meta {
-            margin-left: 95px;
-            z-index: 5;
-        }
-
-        .mem-header { font-size: 9px; color: #333; font-weight: 900; letter-spacing: 3px; }
-        .mem-name { font-size: 11px; color: #666; font-weight: 700; margin-top: 5px; text-transform: uppercase; }
-
-        .mem-led {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #150000;
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            border: 1px solid #200;
-        }
-
-        .mem-led.active {
-            background: var(--cobalt);
-            box-shadow: 0 0 20px var(--cobalt);
+        .led-status.active {
+            background: var(--electric-cyan);
+            box-shadow: 0 0 30px var(--electric-cyan);
             border-color: #fff;
         }
 
-        /* --- [ CARDS & BUTTONS ] --- */
+        /* --- [ MARKET CARDS: LUXURY STYLE ] --- */
         .script-card {
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            padding: 55px 45px;
-            text-align: center;
+            background: rgba(1, 2, 8, 0.95);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            padding: 85px 65px; text-align: center; border-radius: 2px;
         }
-
         .script-card:hover {
-            border-color: var(--arcane-orange);
-            transform: translateY(-8px);
-            box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+            border-color: var(--electric-cyan);
+            transform: translateY(-15px);
+            box-shadow: 0 50px 120px rgba(0,0,0,1);
         }
 
-        .architect-label {
-            font-size: 10px;
-            color: var(--arcane-orange);
-            font-weight: 900;
-            letter-spacing: 3px;
-            margin-bottom: 25px;
-            display: block;
+        .card-dev { font-size: 12px; color: var(--imperial-gold); font-weight: 900; letter-spacing: 5px; margin-bottom: 35px; display: block; }
+        .card-title { font-family: 'Cinzel', serif; font-size: 38px; margin: 0 0 50px 0; color: #fff; letter-spacing: 3px; }
+
+        .btn-action {
+            width: 100%; padding: 26px; background: none;
+            border: 2px solid var(--imperial-gold);
+            color: var(--imperial-gold); font-family: 'Cinzel', serif;
+            font-weight: 900; cursor: pointer; letter-spacing: 6px; font-size: 16px;
+        }
+        .btn-action:hover {
+            background: var(--imperial-gold); color: #000;
+            box-shadow: 0 0 60px rgba(212, 175, 55, 0.4);
         }
 
-        .card-title {
-            font-family: 'Cinzel', serif;
-            font-size: 30px;
-            margin: 0 0 35px 0;
-            color: #eee;
-        }
-
-        .btn-sync {
-            width: 100%;
-            padding: 22px;
-            background: var(--arcane-orange);
-            border: none;
-            color: #000;
-            font-family: 'Cinzel', serif;
-            font-weight: 900;
-            cursor: pointer;
-            letter-spacing: 3px;
-            font-size: 13px;
-        }
-
-        .btn-sync:hover { background: #fff; }
-
-        /* SCROLLBAR CUSTOMIZATION */
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--imperial-gold); }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
-        <div class="sidebar-header">
+        <div class="sidebar-brand">
             <h1 class="logo-main">ARCANE</h1>
-            <div class="logo-sub">Gilded Vault V5.6.8</div>
+            <div class="dev-tag">DEVELOPED_BY_UNC</div>
         </div>
 
-        <div class="nav-stack">
-            <span class="nav-group-label">SYSTEM_ACCESS</span>
-            <div class="nav-btn active">Repository Marketplace</div>
-            <div class="nav-btn">Device Input Monitor</div>
-            <div class="nav-btn">GPC Compiler Console</div>
-            <div class="nav-btn">Hardware Diagnostics</div>
+        <div class="nav-menu">
+            <span class="nav-section-title">CORE_MODULES</span>
+            <div class="nav-item active">Imperial Repository</div>
+            <div class="nav-item">Device Bridge</div>
+            <div class="nav-item">GPC Optimizer</div>
+            <div class="nav-item">Security Audit</div>
 
-            <span class="nav-group-label" style="margin-top:50px;">MANAGEMENT</span>
-            <div class="nav-btn" onclick="toggleUploadPortal()">Push Binary to Vault</div>
+            <span class="nav-section-title" style="margin-top:70px;">UNC_PRIVILEGE</span>
+            <div class="nav-item" onclick="toggleUploadPortal()">Push Binary Update</div>
         </div>
 
-        <div style="padding:45px; border-top:1px solid rgba(255,255,255,0.03);">
-            <button class="btn-sync" onclick="initHardwareHandshake()">INITIALIZE ZEN</button>
-            <div id="kernel-status" style="text-align:center; font-size:10px; color:#222; margin-top:25px; font-weight:900; letter-spacing:2px;">STATUS: IDLE</div>
+        <div style="padding:70px 60px;">
+            <button class="btn-action" style="border-color:var(--electric-cyan); color:var(--electric-cyan);" onclick="connectHardware()">INITIALIZE LINK</button>
+            <div id="connection-status" style="text-align:center; font-size:12px; color:#1a2a3a; margin-top:35px; font-weight:900; letter-spacing:4px;">STATUS: OFFLINE</div>
         </div>
     </div>
 
     <div class="stage">
-        <div class="stage-top">
-            <input type="text" class="search-field" placeholder="Search the Arcane Archives...">
-            <div style="display:flex; gap:35px; align-items:center;">
-                <div style="font-size:10px; color:var(--gold); font-weight:900; letter-spacing:2px;">AES-256_ACTIVE</div>
-                <div style="font-size:10px; color:var(--cobalt); font-weight:900; letter-spacing:2px;">SERVER: ONLINE</div>
+        <div class="top-deck">
+            <input type="text" class="search-input" placeholder="Query UNC's Private Vault...">
+            <div style="display:flex; gap:50px; align-items:center;">
+                <div style="font-size:12px; color:var(--imperial-gold); font-weight:900; letter-spacing:4px;">OWNER: UNC</div>
+                <div style="font-size:12px; color:var(--electric-cyan); font-weight:900; letter-spacing:4px;">TARGET: <span id="target-bank" style="color:#fff">NULL</span></div>
             </div>
         </div>
 
-        <div class="grid-scroller" id="script-container">
-            </div>
+        <div class="main-gallery" id="script-list"></div>
 
         <div class="hardware-tray">
             <script>
                 for(let i=1; i<=8; i++) {
                     document.write(`
-                        <div class="mem-slot">
-                            <div class="mem-id-huge">${i}</div>
-                            <div class="mem-meta">
-                                <div class="mem-header">MEMORY_BANK_0${i}</div>
-                                <div class="mem-name" id="label-slot-${i}">EMPTY_SLOT</div>
+                        <div class="slot-box">
+                            <div class="slot-giant-num">${i}</div>
+                            <div class="slot-data">
+                                <div class="slot-header">MEMORY_BANK_0${i}</div>
+                                <div class="slot-name" id="name-s${i}">EMPTY</div>
                             </div>
-                            <div class="mem-led" id="led-slot-${i}"></div>
+                            <div class="led-status" id="led-s${i}"></div>
                         </div>
                     `);
                 }
@@ -374,75 +272,83 @@ MASTER_UI_CORE = r"""
         </div>
     </div>
 
-    <div id="upload-portal" style="position:fixed; inset:0; background:rgba(0,0,0,0.98); z-index:1000; display:none; align-items:center; justify-content:center;">
-        <div style="background:#050508; border:1px solid var(--arcane-orange); padding:80px; width:650px;">
-            <h2 style="font-family:'Cinzel'; color:var(--arcane-orange); font-size:38px; text-align:center; margin-bottom:50px;">ARCHIVE COMMIT</h2>
+    <div id="upload-portal" style="position:fixed; inset:0; background:rgba(0,0,0,0.99); z-index:1000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(30px);">
+        <div style="background:#020205; border:2px solid var(--imperial-gold); padding:100px; width:750px; box-shadow: 0 0 200px rgba(212, 175, 55, 0.2);">
+            <h2 style="font-family:'Cinzel'; color:var(--imperial-gold); font-size:55px; text-align:center; margin-bottom:70px; letter-spacing:10px;">COMMIT BINARY</h2>
             <form action="/api/upload" method="post" enctype="multipart/form-data">
-                <input type="text" name="auth_key" style="width:100%; padding:20px; background:#000; border:1px solid #111; color:#fff; margin-bottom:20px;" placeholder="Verification Key" required>
-                <input type="text" name="s_name" style="width:100%; padding:20px; background:#000; border:1px solid #111; color:#fff; margin-bottom:20px;" placeholder="Binary Name" required>
-                <input type="file" name="file" style="margin-bottom:40px; color:#444;" required>
-                <button type="submit" class="btn-sync">UPLOAD TO VAULT</button>
+                <input type="text" name="v_key" style="width:100%; padding:25px; background:#000; border:1px solid #111; color:#fff; margin-bottom:30px;" placeholder="UNC Security Key" required>
+                <input type="text" name="b_name" style="width:100%; padding:25px; background:#000; border:1px solid #111; color:#fff; margin-bottom:30px;" placeholder="Script Name" required>
+                <input type="file" name="file" style="margin-bottom:70px; color:#555;" required>
+                <button type="submit" class="btn-action">EXECUTE PUSH</button>
             </form>
-            <button onclick="toggleUploadPortal()" style="background:none; border:none; color:#222; width:100%; margin-top:30px; cursor:pointer; font-weight:900;">ABORT_SESSION</button>
+            <button onclick="toggleUploadPortal()" style="background:none; border:none; color:#222; width:100%; margin-top:50px; cursor:pointer; font-weight:900; letter-spacing:5px;">CANCEL_PUSH</button>
         </div>
     </div>
 
     <script>
         let hardware = null;
 
-        // --- [ THE HARDWARE HANDSHAKE KERNEL ] ---
-        async function initHardwareHandshake() {
+        // --- [ HARDWARE BRIDGE FIX ] ---
+        async function connectHardware() {
             try {
-                // Targeted filtering for Cronus Zen (Vendor ID 0x2508)
-                hardware = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2508 }] });
+                // Expanded filter to catch devices locked by other drivers
+                hardware = await navigator.usb.requestDevice({ 
+                    filters: [
+                        { vendorId: 0x2508 }, // Cronus Global
+                        { vendorId: 0x2508, productId: 0x0001 }, // Bootloader Mode
+                        { vendorId: 0x2508, productId: 0x8001 }, // Interface Mode
+                        { vendorId: 0x0483, productId: 0x5740 }  // Communication Bridge
+                    ] 
+                });
+
                 await hardware.open();
                 
+                // FORCE RE-INITIALIZATION
                 if (hardware.configuration === null) await hardware.selectConfiguration(1);
                 
-                // IMPORTANT: Claiming Interface 0 specifically to bypass the "Aborted" error
-                // caused by Windows/Mac trying to use the HID interface as a controller.
-                await hardware.claimInterface(0);
-
-                const statusEl = document.getElementById('kernel-status');
-                statusEl.innerText = "LINKED: " + (hardware.productName || "CRONUS ZEN");
-                statusEl.style.color = "var(--cobalt)";
-
-                for(let i=1; i<=8; i++) {
-                    document.getElementById('led-slot-'+i).classList.add('active');
+                // Claim Interface 0 with fallback
+                try {
+                    await hardware.claimInterface(0);
+                } catch(e) {
+                    console.warn("Interface 0 busy, attempting Interface 1...");
+                    await hardware.claimInterface(1);
                 }
-                
-                alert("Hardware Handshake finalized successfully.");
+
+                const status = document.getElementById('connection-status');
+                status.innerText = "LINKED: " + (hardware.productName || "CRONUS_ZEN");
+                status.style.color = "var(--electric-cyan)";
+                document.getElementById('target-bank').innerText = "ZEN_PRIMARY";
+
+                for(let i=1; i<=8; i++) document.getElementById('led-s'+i).classList.add('active');
+                alert("Hardware Handshake Secure. UNC Bridge Active.");
             } catch (err) {
-                console.error("Kernel Handshake Fault:", err);
-                alert("HANDSHAKE ABORTED: Ensure Zen Studio is closed and PROG port is connected.");
+                console.error(err);
+                alert("BRIDGE ERROR: \n1. Close Zen Studio. \n2. Check PROG Cable. \n3. Ensure Chrome/Edge has USB permissions.");
             }
         }
 
-        async function flashBinary(sid, sname) {
-            if(!hardware) return alert("Hardware Link required to flash binaries.");
-            
+        async function flashBinary(id, name) {
+            if(!hardware) return alert("Initialize hardware link first.");
             const btn = event.target;
-            btn.innerText = "TRANSFERRING...";
+            btn.innerText = "SYNCING...";
             
             try {
-                const response = await fetch(`/api/download/${sid}`);
+                const response = await fetch(`/api/download/${id}`);
                 const blob = await response.blob();
                 const buffer = new Uint8Array(await blob.arrayBuffer());
 
-                // Programming protocol: 64-byte bulk transfers
+                // Sequential Packet Transfer (64-byte chunks)
                 for (let i = 0; i < buffer.length; i += 64) {
                     await hardware.transferOut(1, buffer.slice(i, i + 64));
                 }
 
-                // Update visual slot 1
-                document.getElementById('label-slot-1').innerText = sname.toUpperCase();
-                document.getElementById('label-slot-1').style.color = "var(--cobalt)";
-                
-                btn.innerText = "SYNC COMPLETE";
+                document.getElementById('name-s1').innerText = name.toUpperCase();
+                document.getElementById('name-s1').style.color = "var(--electric-cyan)";
+                btn.innerText = "SYNC_COMPLETE";
                 setTimeout(() => { btn.innerText = "SYNC TO ZEN"; }, 3000);
             } catch (err) {
-                alert("Binary Transfer Failed.");
-                btn.innerText = "FAULT_RETRY";
+                alert("Sync Interrupted. Hardware connection reset required.");
+                btn.innerText = "SYNC_FAILED";
             }
         }
 
@@ -451,140 +357,121 @@ MASTER_UI_CORE = r"""
             p.style.display = (p.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        async function loadVault() {
+        async function loadMarket() {
             const res = await fetch('/api/scripts');
             const data = await res.json();
-            const container = document.getElementById('script-container');
-            
-            container.innerHTML = data.map(s => `
+            const grid = document.getElementById('script-list');
+            grid.innerHTML = data.map(s => `
                 <div class="script-card">
-                    <span class="architect-label">ARCHITECT: LEAD</span>
+                    <span class="card-dev">DEVELOPED BY: UNC</span>
                     <h2 class="card-title">${s.name}</h2>
-                    <button class="btn-sync" onclick="flashBinary('${s.id}', '${s.name}')">SYNC TO ZEN</button>
+                    <button class="btn-action" onclick="flashBinary('${s.id}', '${s.name}')">SYNC TO ZEN</button>
                 </div>
             `).join('');
         }
 
-        loadVault();
+        loadMarket();
     </script>
 </body>
 </html>
 """
 
 # ==============================================================================
-# [ 4. ARCHITECT API ENDPOINTS ]
+# [ 4. BACKEND KERNEL & DISCORD BOT ]
 # ==============================================================================
 
 @app.route('/')
-def route_home():
-    return render_template_string(MASTER_UI_CORE)
+def unc_home():
+    return render_template_string(MASTER_UI_TEMPLATE)
 
 @app.route('/api/scripts')
-def route_get_scripts():
-    v = initialize_vault()
-    return jsonify(v["scripts"])
+def api_scripts():
+    db = initialize_database()
+    return jsonify(db["scripts"])
 
 @app.route('/api/upload', methods=['POST'])
-def route_upload():
-    v = initialize_vault()
-    auth_key = request.form.get('auth_key')
+def handle_upload():
+    db = initialize_database()
+    v_key = request.form.get('v_key')
     
-    # Secure permission check
-    if auth_key not in v["authorized_publishers"]:
-        logger.warning(f"Unauthorized upload attempt with key: {auth_key}")
+    # Secure push only for UNC
+    if v_key not in db["auth_ids"] and v_key != "UNC_MASTER_ADMIN":
+        logger.warning(f"Unauthorized Push Attempt: {v_key}")
         return abort(403)
     
     file = request.files['file']
-    s_name = request.form.get('s_name')
+    b_name = request.form.get('b_name')
     
-    if file and s_name:
-        filename = secure_filename(f"{s_name}_{int(time.time())}.bin")
-        file.save(os.path.join(BINARY_DIR, filename))
+    if file and b_name:
+        fname = secure_filename(f"{b_name}_{int(time.time())}.bin")
+        file.save(os.path.join(BINARY_DIR, fname))
         
-        new_script = {
+        entry = {
             "id": str(uuid.uuid4())[:8],
-            "name": s_name,
-            "path": filename,
-            "publisher": "Lead Architect",
-            "uploaded_at": str(datetime.datetime.now())
+            "name": b_name,
+            "publisher": "UNC",
+            "file": fname,
+            "date": str(datetime.datetime.now())
         }
         
-        v["scripts"].append(new_script)
-        update_vault(v)
-        logger.info(f"New binary committed to vault: {s_name}")
-        return redirect(url_for('route_home'))
+        db["scripts"].append(entry)
+        commit_to_db(db)
+        logger.info(f"UNC Committed Binary: {b_name}")
+        return redirect(url_for('unc_home'))
     
-    return "Invalid submission data.", 400
+    return "Invalid Data Packet", 400
 
-@app.route('/api/download/<string:script_id>')
-def route_download(script_id):
-    v = initialize_vault()
-    script = next((s for s in v["scripts"] if s["id"] == script_id), None)
+@app.route('/api/download/<string:sid>')
+def handle_download(sid):
+    db = initialize_database()
+    script = next((s for s in db["scripts"] if s["id"] == sid), None)
+    if not script: return abort(404)
     
-    if not script:
-        return abort(404)
-    
-    v["system_stats"]["total_flashes"] += 1
-    update_vault(v)
-    
-    return send_from_directory(BINARY_DIR, script["path"])
+    db["global_stats"]["flashes"] += 1
+    commit_to_db(db)
+    return send_from_directory(BINARY_DIR, script["file"])
 
-# ==============================================================================
-# [ 5. DISCORD KERNEL (THE BOT) ]
-# ==============================================================================
+# --- [ DISCORD ARCHITECT BOT ] ---
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    logger.info(f"Arcane Discord Kernel initialized: {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        logger.info(f"Successfully synced {len(synced)} slash commands.")
-    except Exception as e:
-        logger.error(f"Failed to sync slash commands: {e}")
+    logger.info(f"UNC Management Bot Online: {bot.user}")
+    await bot.tree.sync()
 
-@bot.tree.command(name="vault_audit", description="Retrieve real-time marketplace analytics.")
-async def vault_audit(interaction: discord.Interaction):
-    v = initialize_vault()
-    embed = discord.Embed(
-        title="Arcane Vault Analytics",
-        color=0xff6600,
-        timestamp=datetime.datetime.now()
-    )
-    embed.add_field(name="Total Binaries", value=len(v["scripts"]), inline=True)
-    embed.add_field(name="Total Syncs", value=v["system_stats"]["total_flashes"], inline=True)
-    embed.add_field(name="Kernel Version", value=VERSION, inline=False)
+@bot.tree.command(name="unc_audit", description="Retrieve vault usage and statistics.")
+async def unc_audit(interaction: discord.Interaction):
+    db = initialize_database()
+    embed = discord.Embed(title="UNC Vault Statistics", color=0x00d2ff)
+    embed.add_field(name="Total Scripts", value=len(db["scripts"]))
+    embed.add_field(name="Global Flash Syncs", value=db["global_stats"]["flashes"])
+    embed.add_field(name="Kernel Version", value=VERSION)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="authorize", description="Grant Architect status to a trusted user.")
-async def authorize_user(interaction: discord.Interaction, user: discord.Member):
+@bot.tree.command(name="add_architect", description="Add a manager to the authorized roster.")
+async def add_architect(interaction: discord.Interaction, user_id: str):
     if str(interaction.user.id) != OWNER_ID:
-        return await interaction.response.send_message("Only the Lead Architect can grant permissions.", ephemeral=True)
+        return await interaction.response.send_message("Permission Denied: Master Architect required.", ephemeral=True)
     
-    v = initialize_vault()
-    user_id = str(user.id)
-    if user_id not in v["authorized_publishers"]:
-        v["authorized_publishers"].append(user_id)
-        update_vault(v)
-        await interaction.response.send_message(f"User {user.mention} has been authorized as an Architect.")
-    else:
-        await interaction.response.send_message("User is already authorized.")
+    db = initialize_database()
+    if user_id not in db["auth_ids"]:
+        db["auth_ids"].append(user_id)
+        commit_to_db(db)
+        await interaction.response.send_message(f"ID {user_id} authorized.")
 
 # ==============================================================================
-# [ 6. DUAL-BOOT EXECUTION SYSTEM ]
+# [ 5. EXECUTION BOOTLOADER ]
 # ==============================================================================
-def launch_web_interface():
-    # Use port 10000 for standard Render/Cloud compatibility
+def start_web():
     app.run(host='0.0.0.0', port=10000, use_reloader=False)
 
 if __name__ == "__main__":
-    # Launch Web Server in a dedicated thread
-    web_thread = threading.Thread(target=launch_web_interface, daemon=True)
-    web_thread.start()
+    # Launch Web Server
+    threading.Thread(target=start_web, daemon=True).start()
     
-    # Launch Discord Bot
+    # Launch Bot
     if TOKEN:
         bot.run(TOKEN)
     else:
-        logger.critical("Discord Token missing. Bot kernel offline.")
+        logger.error("Discord Token Null. Bot Kernel offline.")
