@@ -1,41 +1,28 @@
 import os
 import json
-import discord
-from discord import app_commands
-from discord.ext import commands
-from flask import Flask, jsonify, request, send_from_directory
 import threading
-from datetime import datetime
+import discord
+from discord.ext import commands
+from flask import Flask, jsonify, request, render_template_string, send_from_directory, redirect, url_for
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-# ==========================================
-# 1. CORE SYSTEM INITIALIZATION
-# ==========================================
+# --- 1. ENVIRONMENT & SECURITY ---
 load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
-OWNER_PASS = "LucaBlu2026"
-DB_FILE = "vault_storage.json"
-BIN_FOLDER = "scripts_vault"
+# Pulled from Render Environment Variables for security
+TOKEN = os.environ.get("DISCORD_TOKEN")
+OWNER_ID = os.environ.get("OWNER_ID") 
 
-# Versioning and Branding Constants
-VERSION = "V5"
-BRAND = "ARCANE"
-DEV_ID = "UNC"
+DB_FILE = "arcane_vault.json"
+# Matches the 'mountPath' in your render.yaml disk settings
+UPLOAD_FOLDER = "scripts_vault"
 
-# Ensure environment integrity
-if not os.path.exists(BIN_FOLDER):
-    os.makedirs(BIN_FOLDER)
-
-if not os.path.exists(DB_FILE):
-    with open(DB_FILE, "w") as f:
-        json.dump({
-            "publishers": {}, 
-            "scripts": [], 
-            "auth_users": {}, 
-            "user_balances": {} 
-        }, f)
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 def load_db():
+    if not os.path.exists(DB_FILE):
+        return {"scripts": [], "auth_publishers": [OWNER_ID], "settings": {"theme": "dark"}}
     with open(DB_FILE, "r") as f: return json.load(f)
 
 def save_db(data):
@@ -43,452 +30,452 @@ def save_db(data):
 
 app = Flask(__name__)
 
-# ==========================================
-# 2. THE PRODUCTION CMIND UI MIRROR
-# ==========================================
-@app.route('/')
-def index():
-    return f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{BRAND} | {VERSION} MARKETPLACE</title>
-        <style>
-            :root {{
-                --orange: #ff5e00;
-                --bg: #050505;
-                --sidebar: #000000;
-                --card: #0f0f0f;
-                --header: #121212;
-                --border: #1a1a1a;
-                --text-main: #eeeeee;
-                --text-dim: #444444;
-                --console-bg: rgba(0,0,0,0.98);
-            }}
+# --- 2. THE C-MIND MIRROR UI (CSS & HTML) ---
+# This section is expanded to replicate the exact layout and high-def visuals
+MIRROR_UI = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARCANE | Marketplace</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
 
-            body {{
-                background-color: var(--bg);
-                color: var(--text-main);
-                font-family: 'Inter', sans-serif;
-                margin: 0;
-                display: flex;
-                height: 100vh;
-                overflow: hidden;
-            }}
+        :root {
+            --neon-orange: #ff5e00;
+            --arcane-red: #da0a0a;
+            --bg-black: #000000;
+            --sidebar-width: 320px;
+            --glass: rgba(12, 12, 12, 0.95);
+            --border: rgba(255, 94, 0, 0.15);
+            --text-main: #e0e0e0;
+            --text-dim: #444;
+        }
 
-            /* --- SIDEBAR ARCHITECTURE --- */
-            .sidebar {{
-                width: 280px;
-                background-color: var(--sidebar);
-                border-right: 1px solid var(--border);
-                padding: 45px 25px;
-                display: flex;
-                flex-direction: column;
-                box-shadow: 10px 0 40px rgba(0,0,0,0.7);
-                z-index: 100;
-            }}
+        * { box-sizing: border-box; transition: all 0.2s ease-in-out; }
 
-            .logo-container {{ margin-bottom: 40px; }}
-            .logo {{ color: var(--orange); font-size: 28px; font-weight: 900; letter-spacing: 5px; margin: 0; }}
-            .sub-logo {{ font-size: 10px; color: var(--text-dim); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }}
+        body {
+            background-color: var(--bg-black);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-            .btn-connect {{
-                background-color: var(--orange);
-                color: #000;
-                border: none;
-                width: 100%;
-                padding: 18px;
-                font-weight: 900;
-                font-size: 12px;
-                letter-spacing: 1px;
-                cursor: pointer;
-                border-radius: 4px;
-                margin-bottom: 30px;
-                text-transform: uppercase;
-                transition: 0.3s;
-            }}
+        /* --- SIDEBAR LEDGER --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: #050505;
+            border-right: 1px solid #111;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            z-index: 100;
+        }
 
-            .btn-connect:hover {{
-                box-shadow: 0 0 30px rgba(255, 94, 0, 0.45);
-                transform: translateY(-2px);
-            }}
+        .sidebar-brand {
+            padding: 50px 40px;
+            background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+        }
 
-            .status-panel {{
-                background: #080808;
-                border: 1px solid #151515;
-                padding: 18px;
-                border-radius: 4px;
-                font-size: 10px;
-                margin-bottom: 35px;
-            }}
+        .logo {
+            color: var(--neon-orange);
+            font-size: 42px;
+            font-weight: 900;
+            letter-spacing: 6px;
+            text-shadow: 0 0 20px rgba(255, 94, 0, 0.4);
+            margin: 0;
+        }
 
-            .indicator {{ display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1a1a1a; margin-right: 12px; transition: 0.5s; }}
-            .online {{ background: var(--orange); box-shadow: 0 0 12px var(--orange); }}
+        .version-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 3px;
+            font-weight: 800;
+            margin-top: 5px;
+        }
 
-            /* --- BALANCE & CREDITS UI --- */
-            .balance-card {{
-                background: linear-gradient(135deg, #111, #000);
-                border: 1px solid #222;
-                padding: 15px;
-                border-radius: 4px;
-                margin-bottom: 20px;
-            }}
-            .bal-label {{ font-size: 9px; color: #555; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; }}
-            .bal-amount {{ font-size: 20px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }}
-            .bal-symbol {{ color: var(--orange); font-size: 14px; }}
+        .nav-section {
+            flex: 1;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
 
-            /* --- NAVIGATION --- */
-            .nav-group {{ margin-bottom: 25px; }}
-            .nav-title {{ font-size: 9px; color: #222; font-weight: 900; margin-bottom: 12px; letter-spacing: 1px; }}
-            .nav-item {{
-                padding: 12px 0;
-                font-size: 12px;
-                font-weight: 700;
-                color: var(--text-dim);
-                cursor: pointer;
-                transition: 0.2s;
-            }}
-            .nav-item:hover, .nav-active {{ color: #fff; padding-left: 5px; }}
-            .nav-active {{ color: var(--orange) !important; border-left: 2px solid var(--orange); padding-left: 10px; }}
+        .nav-group-label {
+            padding: 20px 40px 10px;
+            font-size: 10px;
+            color: #222;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
 
-            /* --- MAIN REPOSITORY AREA --- */
-            .main {{
-                flex: 1;
-                padding: 60px;
-                overflow-y: auto;
-                background: radial-gradient(circle at top right, #150a05, #050505);
-            }}
+        .nav-item {
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            color: #555;
+            font-size: 13px;
+            font-weight: 700;
+            border-left: 3px solid transparent;
+        }
 
-            .main-header {{
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-end;
-                margin-bottom: 60px;
-            }}
+        .nav-item:hover {
+            color: #fff;
+            background: rgba(255,255,255,0.02);
+        }
 
-            .main-header h1 {{ font-size: 42px; font-weight: 200; margin: 0; letter-spacing: -1px; }}
+        .nav-item.active {
+            color: var(--neon-orange);
+            background: rgba(255, 94, 0, 0.03);
+            border-left: 3px solid var(--neon-orange);
+        }
 
-            .slot-wrapper {{
-                background: #000;
-                border: 1px solid #222;
-                padding: 8px 15px;
-                border-radius: 4px;
-                display: flex;
-                align-items: center;
-                gap: 15px;
-            }}
+        /* --- HARDWARE LIVE MONITOR --- */
+        .hw-panel {
+            margin: 20px 30px;
+            background: #080808;
+            border: 1px solid #111;
+            padding: 25px;
+            border-radius: 4px;
+        }
 
-            #slot-select {{
-                background: transparent;
-                border: none;
-                color: #fff;
-                font-weight: 900;
-                font-size: 10px;
-                cursor: pointer;
-                outline: none;
-                text-transform: uppercase;
-            }}
+        .led-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
 
-            /* --- SCRIPT GRID --- */
-            .grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-                gap: 25px;
-            }}
+        .led-bulb {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #1a1a1a;
+        }
 
-            .card {{
-                background-color: var(--card);
-                border: 1px solid var(--border);
-                border-radius: 4px;
-                overflow: hidden;
-                transition: 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
-            }}
+        .led-bulb.online {
+            background: #00d2ff;
+            box-shadow: 0 0 15px #00d2ff;
+        }
 
-            .card:hover {{
-                border-color: var(--orange);
-                transform: translateY(-10px);
-                box-shadow: 0 25px 50px rgba(0,0,0,0.8);
-            }}
+        /* --- MAIN DASHBOARD CANVAS --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: radial-gradient(circle at top right, #100804 0%, #000 100%);
+        }
 
-            .card-header {{
-                background-color: var(--header);
-                padding: 14px 25px;
-                border-bottom: 1px solid var(--border);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 9px;
-                font-weight: 900;
-                color: #333;
-                letter-spacing: 1px;
-            }}
+        .top-nav {
+            height: 90px;
+            border-bottom: 1px solid #111;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 60px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
 
-            .card-body {{ padding: 40px 30px; }}
-            .card-name {{ font-size: 22px; font-weight: 700; margin: 0 0 8px 0; letter-spacing: -0.5px; }}
-            .card-pub {{ font-size: 11px; color: var(--orange); font-weight: 900; margin-bottom: 30px; text-transform: uppercase; }}
+        .search-container {
+            width: 450px;
+            position: relative;
+        }
 
-            .btn-flash {{
-                background: transparent;
-                border: 1px solid #222;
-                color: #fff;
-                width: 100%;
-                padding: 15px;
-                font-weight: 900;
-                font-size: 11px;
-                cursor: pointer;
-                letter-spacing: 2px;
-                transition: 0.3s;
-                text-transform: uppercase;
-            }}
+        .search-bar {
+            width: 100%;
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            padding: 14px 25px;
+            border-radius: 4px;
+            color: #fff;
+            outline: none;
+            font-size: 13px;
+        }
 
-            .btn-flash:hover {{
-                background-color: #fff;
-                color: #000;
-                border-color: #fff;
-            }}
+        .search-bar:focus { border-color: var(--neon-orange); }
 
-            /* --- CMIND CONSOLE TERMINAL --- */
-            #console-box {{
-                position: fixed;
-                bottom: 0;
-                left: 280px;
-                right: 0;
-                height: 160px;
-                background-color: var(--console-bg);
-                border-top: 1px solid var(--orange);
-                padding: 25px 35px;
-                font-family: 'Courier New', monospace;
-                font-size: 12px;
-                color: var(--orange);
-                overflow-y: auto;
-                display: none;
-                z-index: 1000;
-            }}
+        .slot-config {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: #000;
+            padding: 10px 25px;
+            border-radius: 50px;
+            border: 1px solid #222;
+        }
 
-            .log-line {{ margin-bottom: 5px; opacity: 0; animation: fadeIn 0.3s forwards; }}
-            @keyframes fadeIn {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
-        </style>
-    </head>
-    <body>
-        <div class="sidebar">
-            <div class="logo-container">
-                <h2 class="logo">{BRAND}</h2>
-                <div class="sub-logo">{VERSION} SYSTEM | REPOSITORY</div>
-            </div>
+        /* --- SCRIPT GRID ARCHITECTURE --- */
+        .grid-container {
+            flex: 1;
+            padding: 60px;
+            overflow-y: auto;
+        }
 
-            <button class="btn-connect" onclick="connectZen()">Connect Hardware</button>
+        .script-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 30px;
+        }
 
-            <div class="status-panel">
-                <div id="stat-led" class="indicator"></div>
-                <span id="stat-text" style="color:#444">HW_NOT_DETECTED</span>
-            </div>
+        .script-card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
 
-            <div class="balance-card">
-                <div class="bal-label">Wallet Balance</div>
-                <div class="bal-amount">
-                    <span class="bal-symbol">🪙</span>
-                    <span id="credit-count">0.00</span>
-                </div>
-            </div>
+        .script-card:hover {
+            border-color: var(--neon-orange);
+            transform: translateY(-10px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.9);
+        }
 
-            <div class="nav-group">
-                <div class="nav-title">VAULT EXPLORER</div>
-                <div class="nav-item nav-active">Marketplace</div>
-                <div class="nav-item">Script Library</div>
-                <div class="nav-item">Cloud Configurations</div>
-            </div>
+        .card-preview {
+            height: 200px;
+            background: #050505;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #111;
+        }
 
-            <div class="nav-group" style="margin-top:auto;">
-                <div class="nav-title">SESSION INFO</div>
-                <div style="font-size:10px; color:#333; font-weight:900;">ID: <span id="user-display" style="color:var(--orange)">---</span></div>
-                <div style="font-size:9px; color:#222; margin-top:5px; font-weight:800;">ARCHITECT: {DEV_ID}</div>
+        .card-details { padding: 35px; }
+
+        .author-tag {
+            font-size: 11px;
+            font-weight: 900;
+            color: var(--neon-orange);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .script-name {
+            font-size: 28px;
+            font-weight: 300;
+            margin: 15px 0 30px;
+            letter-spacing: -1px;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 18px;
+            background: var(--neon-orange);
+            color: #000;
+            border: none;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-radius: 4px;
+            letter-spacing: 1px;
+        }
+
+        .btn-action:hover { background: #fff; }
+
+        /* --- MODAL SYSTEM --- */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            width: 500px;
+            background: #0a0a0a;
+            border: 1px solid var(--neon-orange);
+            padding: 60px;
+            border-radius: 4px;
+        }
+
+        input, select {
+            width: 100%;
+            background: #000;
+            border: 1px solid #222;
+            padding: 15px;
+            color: #fff;
+            margin-bottom: 20px;
+            outline: none;
+        }
+
+        input:focus { border-color: var(--neon-orange); }
+
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <h1 class="logo">ARCANE</h1>
+            <div class="version-label">CORE_MARKETPLACE_SYSTEM</div>
+        </div>
+
+        <div class="hw-panel">
+            <div class="led-indicator">
+                <div id="status-led" class="led-bulb"></div>
+                <span id="status-text" style="font-size:11px; font-weight:800; color:#333;">HARDWARE_IDLE</span>
             </div>
         </div>
 
-        <div class="main">
-            <div class="main-header">
-                <div>
-                    <h1>Payload_Gateway</h1>
-                    <div style="color:var(--orange); font-size:11px; font-weight:900; letter-spacing:1px;">ENCRYPTED BINARY UPLINK</div>
-                </div>
-                
-                <div class="slot-wrapper">
-                    <span style="font-size:9px; font-weight:900; color:#444;">TARGET_SLOT</span>
-                    <select id="slot-select">
-                        <option value="1">MEMORY SLOT 1</option>
-                        <option value="2">MEMORY SLOT 2</option>
-                        <option value="3">MEMORY SLOT 3</option>
-                        <option value="4">MEMORY SLOT 4</option>
-                    </select>
-                </div>
+        <div class="nav-section">
+            <div class="nav-group-label">Navigation</div>
+            <div class="nav-item active">Repository Marketplace</div>
+            <div class="nav-item">Device Input Monitor</div>
+            <div class="nav-item">GPC Compiler Console</div>
+
+            <div class="nav-group-label">Developer Access</div>
+            <div class="nav-item" onclick="openPortal()">Push Binary to Vault</div>
+        </div>
+
+        <div style="padding:40px;">
+            <button class="btn-action" onclick="handshake()">Initialize Zen</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-nav">
+            <div class="search-container">
+                <input type="text" class="search-bar" placeholder="Filter through optimized binaries...">
             </div>
+            <div class="slot-config">
+                <span style="font-size:10px; font-weight:900; color:#444;">DESTINATION:</span>
+                <select id="active-slot" style="background:none; border:none; margin:0; padding:0; width:auto; font-weight:900; color:#fff;">
+                    <option value="1">SLOT 01</option><option value="2">SLOT 02</option>
+                    <option value="3">SLOT 03</option><option value="4">SLOT 04</option>
+                </select>
+            </div>
+        </div>
 
-            <div class="grid" id="script-grid">
+        <div class="grid-container">
+            <div class="script-grid" id="main-grid">
                 </div>
         </div>
+    </div>
 
-        <div id="console-box">
-            <div id="terminal-out">> WAITING FOR HANDSHAKE...</div>
+    <div class="overlay" id="dev-modal">
+        <div class="modal-content">
+            <h2 style="font-weight:200; color:var(--neon-orange); margin-top:0;">Vault Synchronization</h2>
+            <form action="/api/upload" method="post" enctype="multipart/form-data">
+                <input type="text" name="pub_id" placeholder="Access Identifier (Discord ID)" required>
+                <input type="text" name="s_name" placeholder="Binary Name" required>
+                <input type="file" name="file" required>
+                <button type="submit" class="btn-action">Upload to Cloud</button>
+            </form>
+            <button onclick="openPortal()" style="background:none; border:none; color:#222; width:100%; margin-top:20px; cursor:pointer; font-weight:900;">CLOSE_SESSION</button>
         </div>
+    </div>
 
-        <script>
-            let zenDevice = null;
-            let currentUserId = prompt("SYNC DATA: ENTER DISCORD USER ID:");
-            document.getElementById('user-display').innerText = currentUserId;
+    <script>
+        let device = null;
 
-            async function connectZen() {{
-                try {{
-                    zenDevice = await navigator.usb.requestDevice({{ filters: [{{ vendorId: 0x1209, productId: 0x2188 }}] }});
-                    await zenDevice.open();
-                    await zenDevice.claimInterface(0);
-                    
-                    document.getElementById('stat-led').classList.add('online');
-                    document.getElementById('stat-text').innerText = "ZEN_RECOGNIZED";
-                    document.getElementById('stat-text').style.color = "#fff";
-                    writeLog("BRIDGE SUCCESS: Hardware communication port claimed.");
-                }} catch (e) {{
-                    writeLog("ERROR: Connection refused. Check PROG port.");
-                }}
-            }}
+        function openPortal() {
+            const m = document.getElementById('dev-modal');
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+        }
 
-            function writeLog(msg) {{
-                const con = document.getElementById('console-box');
-                const out = document.getElementById('terminal-out');
-                con.style.display = 'block';
-                const time = new Date().toLocaleTimeString();
-                out.innerHTML += `<div class="log-line"><span style="color:#333">[${{time}}]</span> ${{msg}}</div>`;
-                con.scrollTop = con.scrollHeight;
-            }}
+        async function handshake() {
+            try {
+                device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x1209, productId: 0x2188 }] });
+                await device.open();
+                await device.claimInterface(0);
+                document.getElementById('status-led').classList.add('online');
+                document.getElementById('status-text').innerText = "ZEN_LINK_ACTIVE";
+                document.getElementById('status-text').style.color = "#fff";
+            } catch (e) { alert("Handshake Failed. Verify PROG mode."); }
+        }
 
-            async function startFlash(scriptId, scriptName) {{
-                if(!zenDevice) return alert("Zen Device not found.");
-                const slot = document.getElementById('slot-select').value;
-                
-                writeLog(`REQUESTING_BINARY: ${{scriptName}}...`);
+        async function triggerFlash(id, name) {
+            if(!device) return alert("Initialize hardware link first.");
+            const slot = document.getElementById('active-slot').value;
+            const res = await fetch(`/api/download/${id}`);
+            if(!res.ok) return alert("Authorization Fault.");
 
-                const res = await fetch(`/api/request_flash/${{scriptId}}?user_id=${{currentUserId}}`);
-                if(!res.ok) {{
-                    writeLog(`<span style="color:red;">DENIED: Access expired or unauthorized for ${{scriptName}}.</span>`);
-                    return;
-                }}
+            const data = new Uint8Array(await (await res.blob()).arrayBuffer());
+            await device.transferOut(1, data);
+            alert(`SUCCESS: ${name} deployed to Slot ${slot}`);
+        }
 
-                const blob = await res.blob();
-                const buffer = await blob.arrayBuffer();
-                const data = new Uint8Array(buffer);
-
-                writeLog(`HANDSHAKE: Purging Memory Slot ${{slot}}...`);
-                
-                try {{
-                    writeLog(`WRITING: Sending ${{data.byteLength}} bytes to address 0x0${{slot}}...`);
-                    await zenDevice.transferOut(1, data); 
-                    
-                    setTimeout(() => {{
-                        writeLog(`VERIFY: Checksum matched.`);
-                        writeLog(`<b>SUCCESS: ${{scriptName}} is now active on Slot ${{slot}}!</b>`);
-                    }}, 1200);
-
-                }} catch (err) {{
-                    writeLog(`FATAL: Hardware bridge lost during write.`);
-                }}
-            }}
-
-            async function refreshUI() {{
-                const res = await fetch('/api/get_scripts');
-                const scripts = await res.json();
-                
-                const balRes = await fetch(`/api/get_balance?user_id=${{currentUserId}}`);
-                const balData = await balRes.json();
-                document.getElementById('credit-count').innerText = balData.balance.toFixed(2);
-
-                const grid = document.getElementById('script-grid');
-                grid.innerHTML = scripts.map(s => `
-                    <div class="card">
-                        <div class="card-header">
-                            <span>VER: ${{s.version || '1.0'}}</span>
-                            <span>BIN_SECURED</span>
-                        </div>
-                        <div class="card-body">
-                            <h3 class="card-name">${{s.name}}</h3>
-                            <div class="card-pub">AUTHOR: ${{s.publisher}}</div>
-                            <button class="btn-flash" onclick="startFlash('${{s.id}}', '${{s.name}}')">Flash to Zen</button>
-                        </div>
+        async function refreshGrid() {
+            const r = await fetch('/api/scripts');
+            const d = await r.json();
+            document.getElementById('main-grid').innerHTML = d.map(s => `
+                <div class="script-card">
+                    <div class="card-preview"><span style="font-size:80px; color:#080808; font-weight:900;">GPC</span></div>
+                    <div class="card-details">
+                        <div class="author-tag">AUTHOR: ${s.publisher}</div>
+                        <h3 class="script-name">${s.name}</h3>
+                        <button class="btn-action" onclick="triggerFlash('${s.id}', '${s.name}')">Deploy to Zen</button>
                     </div>
-                `).join('');
-            }}
+                </div>
+            `).join('');
+        }
+        refreshGrid();
+    </script>
+</body>
+</html>
+"""
 
-            refreshUI();
-        </script>
-    </body>
-    </html>
-    """
+# --- 3. CORE API & DISCORD ---
+@app.route('/')
+def home(): return render_template_string(MIRROR_UI)
 
-# ==========================================
-# 3. BACKEND API & DATA HANDLERS
-# ==========================================
+@app.route('/api/scripts')
+def get_scripts(): return jsonify(load_db()["scripts"])
 
-@app.route('/api/get_scripts')
-def api_get_scripts():
+@app.route('/api/upload', methods=['POST'])
+def upload():
     db = load_db()
-    return jsonify(db["scripts"])
+    pub_id = request.form.get('pub_id')
+    if pub_id not in db["auth_publishers"]: return "Unauthorized", 403
+    
+    file = request.files['file']
+    s_name = request.form.get('s_name')
+    filename = secure_filename(f"{s_name}.bin")
+    file.save(os.path.join(UPLOAD_FOLDER, filename))
+    
+    db["scripts"].append({
+        "id": len(db["scripts"]) + 1,
+        "name": s_name,
+        "publisher": pub_id,
+        "file": filename
+    })
+    save_db(db)
+    return redirect(url_for('home'))
 
-@app.route('/api/get_balance')
-def api_get_balance():
-    user_id = request.args.get('user_id')
+@app.route('/api/download/<int:s_id>')
+def download(s_id):
     db = load_db()
-    bal = db["user_balances"].get(user_id, 0.00)
-    return jsonify({"balance": bal})
+    script = next((s for s in db["scripts"] if s["id"] == s_id), None)
+    if not script: return "404", 404
+    return send_from_directory(UPLOAD_FOLDER, script["file"])
 
-@app.route('/api/request_flash/<script_id>')
-def api_request_flash(script_id):
-    user_id = request.args.get('user_id')
-    db = load_db()
-    script = next((s for s in db["scripts"] if str(s["id"]) == script_id), None)
-    if not script: return "Script Missing", 404
-    allowed = db["auth_users"].get(script["name"], [])
-    if user_id not in allowed:
-        return "Access Denied", 403
-    return send_from_directory(BIN_FOLDER, f"{script['name']}.bin")
-
-# ==========================================
-# 4. DISCORD COMMAND CENTER (BOT)
-# ==========================================
-intents = discord.Intents.default()
-intents.members = True 
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f"--- {BRAND} {VERSION} ENGINE ONLINE ---")
-    await bot.tree.sync()
+bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 @bot.tree.command(name="authorize")
-async def authorize(interaction: discord.Interaction, member: discord.Member, script_name: str):
+async def authorize(interaction: discord.Interaction, member: discord.Member):
+    if str(interaction.user.id) != OWNER_ID: return
     db = load_db()
-    if script_name not in db["auth_users"]:
-        db["auth_users"][script_name] = []
-    if str(member.id) not in db["auth_users"][script_name]:
-        db["auth_users"][script_name].append(str(member.id))
+    if str(member.id) not in db["auth_publishers"]:
+        db["auth_publishers"].append(str(member.id))
         save_db(db)
-        await interaction.response.send_message(f"✅ **AUTHORIZED**: {member.mention} can now flash `{script_name}`.")
-    else:
-        await interaction.response.send_message(f"User already has access to {script_name}.")
+        await interaction.response.send_message(f"Vault access granted to {member.mention}")
 
-@bot.tree.command(name="add_credits")
-async def add_credits(interaction: discord.Interaction, member: discord.Member, amount: float):
-    db = load_db()
-    current = db["user_balances"].get(str(member.id), 0.0)
-    db["user_balances"][str(member.id)] = current + amount
-    save_db(db)
-    await interaction.response.send_message(f"💰 **CREDITS UPDATED**: Added {amount} to {member.mention}. New Balance: {current + amount}")
-
-# ==========================================
-# 5. EXECUTION BRIDGE
-# ==========================================
 def run_web():
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
     threading.Thread(target=run_web, daemon=True).start()
-    bot.run(TOKEN)
+    if TOKEN:
+        bot.run(TOKEN)
