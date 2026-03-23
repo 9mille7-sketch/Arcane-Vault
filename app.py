@@ -6,100 +6,95 @@ import datetime
 import secrets
 import time
 import uuid
-import requests
-from flask import Flask, jsonify, request, render_template_string, send_from_directory, redirect, url_for, session
+import sys
+from flask import Flask, jsonify, request, render_template_string, send_from_directory, redirect, url_for, session, abort
 from werkzeug.utils import secure_filename
 from discord.ext import commands
 import discord
 from dotenv import load_dotenv
 
 # ==============================================================================
-# [ 1. SYSTEM CORE & SECURITY CONFIG ]
+# [ 1. KERNEL & ENVIRONMENT ARCHITECTURE ]
 # ==============================================================================
 load_dotenv()
 TOKEN = os.environ.get("DISCORD_TOKEN")
-# Replace with your actual Discord ID for the 'Lead Architect' tag
-OWNER_ID = "638512345678901234" 
-VERSION = "V5.6.5-PREMIUM-MARBLE"
+OWNER_ID = "638512345678901234" # Brian Miller / Lead Architect
+VERSION = "V5.6.8-STABLE"
 
-# Directory Architecture
+# File System Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "arcane_vault_v5.json")
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "scripts_vault")
-LOG_FILE = os.path.join(BASE_DIR, "system_audit.log")
+VAULT_PATH = os.path.join(BASE_DIR, "arcane_vault.json")
+BINARY_DIR = os.path.join(BASE_DIR, "vault_binaries")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Ensure environment is primed
+for path in [BINARY_DIR, LOG_DIR]:
+    if not os.path.exists(path):
+        os.makedirs(path)
 
-# Professional Audit Logging
+# Advanced Logging System
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] ARCANE_CORE: %(message)s',
-    handlers=[logging.FileHandler(LOG_FILE), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "kernel.log")),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 logger = logging.getLogger("ArcaneCore")
 
 # ==============================================================================
-# [ 2. DATA ARCHIVE MANAGEMENT (JSON DATABASE) ]
+# [ 2. SECURE VAULT ENGINE ]
 # ==============================================================================
-def load_vault():
-    """Access the secure JSON vault for script metadata."""
-    if not os.path.exists(DB_FILE):
-        return {
+def initialize_vault():
+    if not os.path.exists(VAULT_PATH):
+        initial_data = {
             "scripts": [],
             "authorized_publishers": [OWNER_ID],
-            "system_logs": [],
-            "stats": {"total_flashes": 0, "active_sessions": 0},
-            "config": {
-                "version": VERSION,
-                "lead_dev": "Unc",
-                "theme": "Blue-Gold-Marble"
-            }
+            "system_stats": {"total_flashes": 0, "unique_visitors": 0},
+            "registry": {"created_at": str(datetime.datetime.now()), "version": VERSION}
         }
-    try:
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Vault Read Error: {e}")
-        return {"scripts": [], "authorized_publishers": [OWNER_ID]}
+        with open(VAULT_PATH, "w") as f:
+            json.dump(initial_data, f, indent=4)
+        return initial_data
+    
+    with open(VAULT_PATH, "r") as f:
+        return json.load(f)
 
-def save_vault(data):
-    """Commit changes to the vault disk."""
-    try:
-        with open(DB_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        logger.error(f"Vault Write Error: {e}")
+def update_vault(data):
+    with open(VAULT_PATH, "w") as f:
+        json.dump(data, f, indent=4)
 
 # ==============================================================================
-# [ 3. THE GILDED INTERFACE ENGINE (700+ LINE FRONTEND) ]
+# [ 3. THE GILDED INTERFACE (FULL-SCALE CSS & HTML) ]
 # ==============================================================================
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(64)
 
-MASTER_UI_TEMPLATE = r"""
+# This block represents the core visual identity
+MASTER_UI_CORE = r"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCANE REPOSITORY | V5.6.5 PREMIUM</title>
+    <title>ARCANE REPOSITORY | V5.6.8</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Montserrat:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
-        /* --- [ CSS MASTER ENGINE: BLUE, GOLD & MARBLE ] --- */
+        /* --- [ CSS MASTER ENGINE: BLUE, GOLD & NIGHTMARE ] --- */
         :root {
             --cobalt: #00d2ff;
             --gold: #ffd700;
-            --marble-texture: url('https://i.ibb.co/3c1baac1/marble.png');
-            --deep-black: #020205;
-            --panel-glass: rgba(0, 0, 0, 0.92);
             --arcane-orange: #ff6600;
+            --deep-black: #020205;
+            --panel-bg: rgba(5, 7, 12, 0.98);
+            --marble-url: url('https://i.ibb.co/3c1baac1/marble.png'); /* User provided high-res texture */
         }
 
-        * { box-sizing: border-box; outline: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        * { box-sizing: border-box; outline: none; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
         
         body {
-            background: linear-gradient(rgba(0, 0, 20, 0.7), rgba(0, 0, 0, 0.9)), var(--marble-texture);
+            background: linear-gradient(rgba(0, 0, 10, 0.85), rgba(0, 0, 0, 0.95)), var(--marble-url);
             background-size: cover;
             background-attachment: fixed;
             background-position: center;
@@ -109,82 +104,74 @@ MASTER_UI_TEMPLATE = r"""
             height: 100vh;
             display: flex;
             overflow: hidden;
-            border: 4px solid #111;
+            border: 2px solid #111;
         }
 
-        /* --- [ SIDEBAR NAVIGATION ] --- */
+        /* --- [ SIDEBAR: CMIND DESIGN LANGUAGE ] --- */
         .sidebar {
-            width: 420px;
-            background: var(--panel-glass);
-            border-right: 1px solid rgba(255, 215, 0, 0.1);
+            width: 400px;
+            background: var(--panel-bg);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             flex-direction: column;
             z-index: 100;
-            backdrop-filter: blur(25px);
-            box-shadow: 20px 0 60px rgba(0,0,0,0.8);
+            backdrop-filter: blur(30px);
+            box-shadow: 15px 0 50px rgba(0,0,0,0.9);
         }
 
         .sidebar-header {
             padding: 70px 45px;
-            text-align: left;
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         }
 
-        .logo {
+        .logo-main {
             font-family: 'Cinzel', serif;
-            font-size: 55px;
+            font-size: 52px;
             font-weight: 900;
-            letter-spacing: 10px;
+            letter-spacing: 8px;
             color: var(--arcane-orange);
-            text-shadow: 0 0 30px rgba(255, 102, 0, 0.3);
+            text-shadow: 0 0 25px rgba(255, 102, 0, 0.4);
             margin: 0;
         }
 
-        .tagline {
-            font-size: 10px;
+        .logo-sub {
+            font-size: 9px;
             color: #444;
             letter-spacing: 4px;
-            margin-top: 15px;
             font-weight: 900;
             text-transform: uppercase;
+            margin-top: 15px;
         }
 
-        .nav-content { flex: 1; padding: 50px 45px; }
+        .nav-stack { flex: 1; padding: 50px 45px; }
         
-        .nav-label {
+        .nav-group-label {
             font-size: 10px;
             color: #222;
             font-weight: 900;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            margin-bottom: 35px;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
             display: block;
         }
 
-        .nav-item {
+        .nav-btn {
             display: flex;
             align-items: center;
-            padding: 22px;
+            padding: 20px;
             color: #666;
             font-weight: 900;
             text-decoration: none;
-            font-size: 13px;
-            border-radius: 4px;
-            margin-bottom: 15px;
+            font-size: 12px;
+            border-radius: 2px;
+            margin-bottom: 12px;
             border: 1px solid transparent;
             cursor: pointer;
         }
 
-        .nav-item:hover, .nav-item.active {
+        .nav-btn:hover, .nav-btn.active {
             color: var(--arcane-orange);
             background: rgba(255, 102, 0, 0.05);
             border-color: var(--arcane-orange);
-            box-shadow: 0 0 20px rgba(255, 102, 0, 0.1);
-        }
-
-        .sidebar-footer {
-            padding: 45px;
-            border-top: 1px solid rgba(255, 255, 255, 0.03);
         }
 
         /* --- [ MAIN STAGE INTERFACE ] --- */
@@ -195,77 +182,76 @@ MASTER_UI_TEMPLATE = r"""
             position: relative;
         }
 
-        .stage-header {
-            height: 120px;
-            padding: 0 70px;
+        .stage-top {
+            height: 100px;
+            padding: 0 60px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.4);
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         }
 
-        .search-vault {
+        .search-field {
             width: 450px;
             background: #000;
             border: 1px solid #111;
-            padding: 22px 30px;
+            padding: 20px 25px;
             color: #fff;
             border-radius: 4px;
             font-size: 14px;
         }
 
-        .grid-container {
+        .grid-scroller {
             flex: 1;
-            padding: 70px;
+            padding: 65px;
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-            gap: 50px;
+            gap: 45px;
             overflow-y: auto;
         }
 
-        /* --- [ REINFORCED 8-SLOT SYSTEM GRID ] --- */
-        .footer-tray {
-            height: 380px;
-            background: rgba(0, 0, 0, 0.95);
-            border-top: 2px solid var(--gold);
+        /* --- [ REINFORCED 8-SLOT HARDWARE GRID ] --- */
+        .hardware-tray {
+            height: 350px;
+            background: rgba(5, 6, 10, 0.98);
+            border-top: 2px solid #111;
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             grid-template-rows: repeat(2, 1fr);
             padding: 20px;
-            gap: 20px;
+            gap: 15px;
         }
 
-        .memory-slot {
-            background: rgba(15, 20, 30, 0.8);
-            border: 1px solid #111;
+        .mem-slot {
+            background: rgba(18, 22, 30, 0.85);
+            border: 1px solid #1a1a1a;
             display: flex;
             align-items: center;
             padding: 30px;
             position: relative;
-            overflow: hidden;
         }
 
-        .slot-num-giant {
+        .mem-id-huge {
             font-family: 'Montserrat', sans-serif;
-            font-size: 90px;
+            font-size: 85px;
             font-weight: 900;
-            color: #4a90e2;
-            opacity: 0.7;
+            color: var(--cobalt);
+            opacity: 0.5;
             position: absolute;
             left: 20px;
             z-index: 1;
         }
 
-        .slot-details {
-            margin-left: 100px;
+        .mem-meta {
+            margin-left: 95px;
             z-index: 5;
         }
 
-        .slot-header { font-size: 10px; color: #333; font-weight: 900; letter-spacing: 3px; margin-bottom: 5px; }
-        .slot-status { font-size: 13px; color: #555; font-weight: 700; text-transform: uppercase; }
+        .mem-header { font-size: 9px; color: #333; font-weight: 900; letter-spacing: 3px; }
+        .mem-name { font-size: 11px; color: #666; font-weight: 700; margin-top: 5px; text-transform: uppercase; }
 
-        .led-indicator {
+        .mem-led {
             width: 12px;
             height: 12px;
             border-radius: 50%;
@@ -273,50 +259,46 @@ MASTER_UI_TEMPLATE = r"""
             position: absolute;
             top: 20px;
             right: 20px;
-            border: 1px solid #300;
+            border: 1px solid #200;
         }
 
-        .led-indicator.online {
+        .mem-led.active {
             background: var(--cobalt);
             box-shadow: 0 0 20px var(--cobalt);
             border-color: #fff;
         }
 
-        /* --- [ SCRIPT CARDS ] --- */
+        /* --- [ CARDS & BUTTONS ] --- */
         .script-card {
-            background: rgba(5, 5, 10, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 60px 45px;
-            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 55px 45px;
             text-align: center;
-            position: relative;
         }
 
         .script-card:hover {
-            transform: translateY(-10px);
             border-color: var(--arcane-orange);
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8);
         }
 
-        .author-tag {
+        .architect-label {
             font-size: 10px;
             color: var(--arcane-orange);
             font-weight: 900;
             letter-spacing: 3px;
-            text-transform: uppercase;
             margin-bottom: 25px;
+            display: block;
         }
 
-        .script-name {
+        .card-title {
             font-family: 'Cinzel', serif;
-            font-size: 32px;
+            font-size: 30px;
             margin: 0 0 35px 0;
-            font-weight: 900;
-            letter-spacing: 2px;
             color: #eee;
         }
 
-        .btn-universal {
+        .btn-sync {
             width: 100%;
             padding: 22px;
             background: var(--arcane-orange);
@@ -325,99 +307,66 @@ MASTER_UI_TEMPLATE = r"""
             font-family: 'Cinzel', serif;
             font-weight: 900;
             cursor: pointer;
-            letter-spacing: 4px;
+            letter-spacing: 3px;
             font-size: 13px;
-            border-radius: 2px;
         }
 
-        .btn-universal:hover {
-            background: #fff;
-            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
-        }
+        .btn-sync:hover { background: #fff; }
 
-        /* --- [ MODAL OVERLAYS ] --- */
-        #portal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.98);
-            z-index: 1000;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(15px);
-        }
-
-        .portal-content {
-            background: #040508;
-            border: 1px solid var(--arcane-orange);
-            padding: 100px;
-            width: 750px;
-            box-shadow: 0 0 100px rgba(255, 102, 0, 0.15);
-        }
-
-        .arcane-input {
-            width: 100%;
-            padding: 25px;
-            background: #000;
-            border: 1px solid #111;
-            color: #fff;
-            margin-bottom: 25px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 15px;
-        }
-
-        .arcane-input:focus { border-color: var(--gold); }
-
+        /* SCROLLBAR CUSTOMIZATION */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1 class="logo">ARCANE</h1>
-            <div class="tagline">Gilded Repository V5.6.5</div>
+            <h1 class="logo-main">ARCANE</h1>
+            <div class="logo-sub">Gilded Vault V5.6.8</div>
         </div>
 
-        <div class="nav-content">
-            <span class="nav-label">ARCHIVE ACCESS</span>
-            <div class="nav-item active">Repository Marketplace</div>
-            <div class="nav-item">Device Input Monitor</div>
-            <div class="nav-item">GPC Compiler Console</div>
-            <div class="nav-item">System Diagnostics</div>
+        <div class="nav-stack">
+            <span class="nav-group-label">SYSTEM_ACCESS</span>
+            <div class="nav-btn active">Repository Marketplace</div>
+            <div class="nav-btn">Device Input Monitor</div>
+            <div class="nav-btn">GPC Compiler Console</div>
+            <div class="nav-btn">Hardware Diagnostics</div>
 
-            <span class="nav-label" style="margin-top:60px;">ARCHITECT GATE</span>
-            <div class="nav-item" onclick="togglePortal()">Commit New Binary</div>
+            <span class="nav-group-label" style="margin-top:50px;">MANAGEMENT</span>
+            <div class="nav-btn" onclick="toggleUploadPortal()">Push Binary to Vault</div>
         </div>
 
-        <div class="sidebar-footer">
-            <button class="btn-universal" onclick="connectHardware()">INITIALIZE HANDSHAKE</button>
-            <div id="handshake-status" style="text-align:center; font-size:10px; color:#333; margin-top:30px; letter-spacing:3px; font-weight:900;">SYSTEM_OFFLINE</div>
+        <div style="padding:45px; border-top:1px solid rgba(255,255,255,0.03);">
+            <button class="btn-sync" onclick="initHardwareHandshake()">INITIALIZE ZEN</button>
+            <div id="kernel-status" style="text-align:center; font-size:10px; color:#222; margin-top:25px; font-weight:900; letter-spacing:2px;">STATUS: IDLE</div>
         </div>
     </div>
 
     <div class="stage">
-        <div class="stage-header">
-            <input type="text" class="search-vault" placeholder="Query the secret archives...">
-            <div style="display:flex; gap:40px;">
-                <div style="font-size:10px; color:var(--gold); font-weight:900; letter-spacing:2px;">ENCRYPTION: ACTIVE</div>
-                <div style="font-size:10px; color:var(--cobalt); font-weight:900; letter-spacing:2px;">DEST: <span id="dest-slot" style="color:#fff">SLOT_01</span></div>
+        <div class="stage-top">
+            <input type="text" class="search-field" placeholder="Search the Arcane Archives...">
+            <div style="display:flex; gap:35px; align-items:center;">
+                <div style="font-size:10px; color:var(--gold); font-weight:900; letter-spacing:2px;">AES-256_ACTIVE</div>
+                <div style="font-size:10px; color:var(--cobalt); font-weight:900; letter-spacing:2px;">SERVER: ONLINE</div>
             </div>
         </div>
 
-        <div class="grid-container" id="vault-grid">
+        <div class="grid-scroller" id="script-container">
             </div>
 
-        <div class="footer-tray">
+        <div class="hardware-tray">
             <script>
                 for(let i=1; i<=8; i++) {
                     document.write(`
-                        <div class="memory-slot">
-                            <div class="slot-num-giant">${i}</div>
-                            <div class="slot-details">
-                                <div class="slot-header">MEMORY_BANK_0${i}</div>
-                                <div class="slot-status" id="slot-name-${i}">EMPTY_SLOT</div>
+                        <div class="mem-slot">
+                            <div class="mem-id-huge">${i}</div>
+                            <div class="mem-meta">
+                                <div class="mem-header">MEMORY_BANK_0${i}</div>
+                                <div class="mem-name" id="label-slot-${i}">EMPTY_SLOT</div>
                             </div>
-                            <div class="led-indicator" id="led-${i}"></div>
+                            <div class="mem-led" id="led-slot-${i}"></div>
                         </div>
                     `);
                 }
@@ -425,193 +374,217 @@ MASTER_UI_TEMPLATE = r"""
         </div>
     </div>
 
-    <div id="portal-overlay">
-        <div class="portal-content">
-            <h2 style="font-family:'Cinzel'; color:var(--arcane-orange); font-size:45px; margin-bottom:60px; text-align:center; letter-spacing:5px;">ARCHIVE COMMIT</h2>
+    <div id="upload-portal" style="position:fixed; inset:0; background:rgba(0,0,0,0.98); z-index:1000; display:none; align-items:center; justify-content:center;">
+        <div style="background:#050508; border:1px solid var(--arcane-orange); padding:80px; width:650px;">
+            <h2 style="font-family:'Cinzel'; color:var(--arcane-orange); font-size:38px; text-align:center; margin-bottom:50px;">ARCHIVE COMMIT</h2>
             <form action="/api/upload" method="post" enctype="multipart/form-data">
-                <input type="text" name="pub_id" class="arcane-input" placeholder="Architect Verification Key" required>
-                <input type="text" name="s_name" class="arcane-input" placeholder="Script Identification Name" required>
-                <input type="file" name="file" style="margin-bottom:60px; color:#555;" required>
-                <button type="submit" class="btn-universal">SECURE UPLOAD</button>
+                <input type="text" name="auth_key" style="width:100%; padding:20px; background:#000; border:1px solid #111; color:#fff; margin-bottom:20px;" placeholder="Verification Key" required>
+                <input type="text" name="s_name" style="width:100%; padding:20px; background:#000; border:1px solid #111; color:#fff; margin-bottom:20px;" placeholder="Binary Name" required>
+                <input type="file" name="file" style="margin-bottom:40px; color:#444;" required>
+                <button type="submit" class="btn-sync">UPLOAD TO VAULT</button>
             </form>
-            <button onclick="togglePortal()" style="background:none; border:none; color:#222; width:100%; margin-top:40px; cursor:pointer; font-weight:900; letter-spacing:3px;">ABORT_SESSION</button>
+            <button onclick="toggleUploadPortal()" style="background:none; border:none; color:#222; width:100%; margin-top:30px; cursor:pointer; font-weight:900;">ABORT_SESSION</button>
         </div>
     </div>
 
     <script>
-        let zen = null;
+        let hardware = null;
 
-        // --- [ KERNEL HARDWARE HANDSHAKE ] ---
-        async function connectHardware() {
+        // --- [ THE HARDWARE HANDSHAKE KERNEL ] ---
+        async function initHardwareHandshake() {
             try {
-                zen = await navigator.usb.requestDevice({ filters: [] });
-                await zen.open();
-                if (zen.configuration === null) await zen.selectConfiguration(1);
+                // Targeted filtering for Cronus Zen (Vendor ID 0x2508)
+                hardware = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2508 }] });
+                await hardware.open();
                 
-                // NO-DRIVER FIX: Claiming only Interface 0 to avoid Windows conflicts
-                await zen.claimInterface(0);
+                if (hardware.configuration === null) await hardware.selectConfiguration(1);
+                
+                // IMPORTANT: Claiming Interface 0 specifically to bypass the "Aborted" error
+                // caused by Windows/Mac trying to use the HID interface as a controller.
+                await hardware.claimInterface(0);
 
-                const stat = document.getElementById('handshake-status');
-                stat.innerText = "LINKED: " + (zen.productName || "ZEN_UNIT");
-                stat.style.color = "var(--cobalt)";
+                const statusEl = document.getElementById('kernel-status');
+                statusEl.innerText = "LINKED: " + (hardware.productName || "CRONUS ZEN");
+                statusEl.style.color = "var(--cobalt)";
 
-                // Light up hardware slots
                 for(let i=1; i<=8; i++) {
-                    document.getElementById('led-'+i).classList.add('online');
+                    document.getElementById('led-slot-'+i).classList.add('active');
                 }
                 
-                alert("Handshake Complete. Arcane Repository is now synchronized with hardware.");
+                alert("Hardware Handshake finalized successfully.");
             } catch (err) {
-                console.error(err);
-                alert("Handshake Aborted. Verify PROG port and close Zen Studio.");
+                console.error("Kernel Handshake Fault:", err);
+                alert("HANDSHAKE ABORTED: Ensure Zen Studio is closed and PROG port is connected.");
             }
         }
 
-        async function flashToMemory(scriptId, scriptName) {
-            if(!zen) return alert("Hardware Link Required.");
+        async function flashBinary(sid, sname) {
+            if(!hardware) return alert("Hardware Link required to flash binaries.");
             
             const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = "PROGRAMMING...";
+            btn.innerText = "TRANSFERRING...";
             
             try {
-                const response = await fetch(`/api/download/${scriptId}`);
+                const response = await fetch(`/api/download/${sid}`);
                 const blob = await response.blob();
                 const buffer = new Uint8Array(await blob.arrayBuffer());
 
-                // PROGRAMMING PROTOCOL: 64-Byte Packet Stream
+                // Programming protocol: 64-byte bulk transfers
                 for (let i = 0; i < buffer.length; i += 64) {
-                    await zen.transferOut(1, buffer.slice(i, i + 64));
+                    await hardware.transferOut(1, buffer.slice(i, i + 64));
                 }
 
-                // Update Visual Slot 1 (Default)
-                document.getElementById('slot-name-1').innerText = scriptName.toUpperCase();
-                document.getElementById('slot-name-1').style.color = "var(--cobalt)";
+                // Update visual slot 1
+                document.getElementById('label-slot-1').innerText = sname.toUpperCase();
+                document.getElementById('label-slot-1').style.color = "var(--cobalt)";
                 
                 btn.innerText = "SYNC COMPLETE";
-                setTimeout(() => { btn.innerText = originalText; }, 3000);
+                setTimeout(() => { btn.innerText = "SYNC TO ZEN"; }, 3000);
             } catch (err) {
-                alert("Transfer Interrupted.");
-                btn.innerText = "FAULT DETECTED";
+                alert("Binary Transfer Failed.");
+                btn.innerText = "FAULT_RETRY";
             }
         }
 
-        function togglePortal() {
-            const p = document.getElementById('portal-overlay');
+        function toggleUploadPortal() {
+            const p = document.getElementById('upload-portal');
             p.style.display = (p.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        async function refreshArchives() {
-            const r = await fetch('/api/scripts');
-            const data = await r.json();
-            const grid = document.getElementById('vault-grid');
+        async function loadVault() {
+            const res = await fetch('/api/scripts');
+            const data = await res.json();
+            const container = document.getElementById('script-container');
             
-            grid.innerHTML = data.map(s => `
+            container.innerHTML = data.map(s => `
                 <div class="script-card">
-                    <div class="author-tag">Architect: ${s.publisher}</div>
-                    <h2 class="script-name">${s.name}</h2>
-                    <button class="btn-universal" onclick="flashToMemory('${s.id}', '${s.name}')">SYNC TO ZEN</button>
+                    <span class="architect-label">ARCHITECT: LEAD</span>
+                    <h2 class="card-title">${s.name}</h2>
+                    <button class="btn-sync" onclick="flashBinary('${s.id}', '${s.name}')">SYNC TO ZEN</button>
                 </div>
             `).join('');
         }
 
-        refreshArchives();
+        loadVault();
     </script>
 </body>
 </html>
 """
 
 # ==============================================================================
-# [ 4. BACKEND API ENDPOINTS ]
+# [ 4. ARCHITECT API ENDPOINTS ]
 # ==============================================================================
 
 @app.route('/')
-def main_view():
-    return render_template_string(MASTER_UI_TEMPLATE)
+def route_home():
+    return render_template_string(MASTER_UI_CORE)
 
 @app.route('/api/scripts')
-def api_scripts():
-    v = load_vault()
+def route_get_scripts():
+    v = initialize_vault()
     return jsonify(v["scripts"])
 
 @app.route('/api/upload', methods=['POST'])
-def api_upload():
-    v = load_vault()
-    pub_id = request.form.get('pub_id')
+def route_upload():
+    v = initialize_vault()
+    auth_key = request.form.get('auth_key')
     
-    # Architect Verification
-    if pub_id not in v["authorized_publishers"]:
-        logger.warning(f"Unauthorized Access: {pub_id}")
-        return "Verification Failed: Access Denied.", 403
+    # Secure permission check
+    if auth_key not in v["authorized_publishers"]:
+        logger.warning(f"Unauthorized upload attempt with key: {auth_key}")
+        return abort(403)
     
     file = request.files['file']
     s_name = request.form.get('s_name')
     
     if file and s_name:
-        safe_name = secure_filename(f"{s_name}_{int(time.time())}.bin")
-        file.save(os.path.join(UPLOAD_FOLDER, safe_name))
+        filename = secure_filename(f"{s_name}_{int(time.time())}.bin")
+        file.save(os.path.join(BINARY_DIR, filename))
         
-        entry = {
+        new_script = {
             "id": str(uuid.uuid4())[:8],
             "name": s_name,
-            "publisher": "Lead Architect" if pub_id == OWNER_ID else "Architect",
-            "filename": safe_name,
-            "timestamp": str(datetime.datetime.now())
+            "path": filename,
+            "publisher": "Lead Architect",
+            "uploaded_at": str(datetime.datetime.now())
         }
         
-        v["scripts"].append(entry)
-        save_vault(v)
-        return redirect(url_for('main_view'))
+        v["scripts"].append(new_script)
+        update_vault(v)
+        logger.info(f"New binary committed to vault: {s_name}")
+        return redirect(url_for('route_home'))
     
-    return "Invalid Data Block", 400
+    return "Invalid submission data.", 400
 
-@app.route('/api/download/<string:s_id>')
-def api_download(s_id):
-    v = load_vault()
-    script = next((s for s in v["scripts"] if s["id"] == s_id), None)
-    if not script:
-        return "Binary not found in Vault", 404
+@app.route('/api/download/<string:script_id>')
+def route_download(script_id):
+    v = initialize_vault()
+    script = next((s for s in v["scripts"] if s["id"] == script_id), None)
     
-    v["stats"]["total_flashes"] += 1
-    save_vault(v)
-    return send_from_directory(UPLOAD_FOLDER, script["filename"])
+    if not script:
+        return abort(404)
+    
+    v["system_stats"]["total_flashes"] += 1
+    update_vault(v)
+    
+    return send_from_directory(BINARY_DIR, script["path"])
 
 # ==============================================================================
-# [ 5. DISCORD ARCHITECT BOT ]
+# [ 5. DISCORD KERNEL (THE BOT) ]
 # ==============================================================================
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    logger.info(f"Arcane Discord Kernel Online: {bot.user}")
-    await bot.tree.sync()
+    logger.info(f"Arcane Discord Kernel initialized: {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        logger.info(f"Successfully synced {len(synced)} slash commands.")
+    except Exception as e:
+        logger.error(f"Failed to sync slash commands: {e}")
 
-@bot.tree.command(name="vault_audit", description="Audit the repository statistics.")
-async def audit(interaction: discord.Interaction):
-    v = load_vault()
-    scripts_total = len(v["scripts"])
-    flashes = v["stats"]["total_flashes"]
-    
-    embed = discord.Embed(title="Arcane Vault Audit", color=0xff6600)
-    embed.add_field(name="Total Binaries", value=scripts_total)
-    embed.add_field(name="Successful Syncs", value=flashes)
-    embed.add_field(name="Version", value=VERSION)
+@bot.tree.command(name="vault_audit", description="Retrieve real-time marketplace analytics.")
+async def vault_audit(interaction: discord.Interaction):
+    v = initialize_vault()
+    embed = discord.Embed(
+        title="Arcane Vault Analytics",
+        color=0xff6600,
+        timestamp=datetime.datetime.now()
+    )
+    embed.add_field(name="Total Binaries", value=len(v["scripts"]), inline=True)
+    embed.add_field(name="Total Syncs", value=v["system_stats"]["total_flashes"], inline=True)
+    embed.add_field(name="Kernel Version", value=VERSION, inline=False)
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="authorize", description="Grant Architect status to a trusted user.")
+async def authorize_user(interaction: discord.Interaction, user: discord.Member):
+    if str(interaction.user.id) != OWNER_ID:
+        return await interaction.response.send_message("Only the Lead Architect can grant permissions.", ephemeral=True)
+    
+    v = initialize_vault()
+    user_id = str(user.id)
+    if user_id not in v["authorized_publishers"]:
+        v["authorized_publishers"].append(user_id)
+        update_vault(v)
+        await interaction.response.send_message(f"User {user.mention} has been authorized as an Architect.")
+    else:
+        await interaction.response.send_message("User is already authorized.")
+
 # ==============================================================================
-# [ 6. EXECUTION ENGINE ]
+# [ 6. DUAL-BOOT EXECUTION SYSTEM ]
 # ==============================================================================
-def run_web_server():
-    # Running on Port 10000 for standard hosting compatibility
+def launch_web_interface():
+    # Use port 10000 for standard Render/Cloud compatibility
     app.run(host='0.0.0.0', port=10000, use_reloader=False)
 
 if __name__ == "__main__":
-    # Start Web Thread
-    threading.Thread(target=run_web_server, daemon=True).start()
+    # Launch Web Server in a dedicated thread
+    web_thread = threading.Thread(target=launch_web_interface, daemon=True)
+    web_thread.start()
     
-    # Start Discord Bot
+    # Launch Discord Bot
     if TOKEN:
         bot.run(TOKEN)
     else:
-        logger.critical("CRITICAL ERROR: Discord Token missing from Environment.")
+        logger.critical("Discord Token missing. Bot kernel offline.")
