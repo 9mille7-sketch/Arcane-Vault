@@ -1,5 +1,6 @@
-﻿flask
+flask
 gunicorn
 requests
 discord.py
 python-dotenv
+flask-cors
